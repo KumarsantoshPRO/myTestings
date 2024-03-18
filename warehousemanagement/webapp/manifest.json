@@ -1,0 +1,133 @@
+{
+  "_version": "1.59.0",
+  "sap.app": {
+    "id": "warehousemanagement",
+    "type": "application",
+    "i18n": "i18n/i18n.properties",
+    "applicationVersion": {
+      "version": "0.0.1"
+    },
+    "title": "{{appTitle}}",
+    "description": "{{appDescription}}",
+    "resources": "resources.json",
+    "sourceTemplate": {
+      "id": "@sap/generator-fiori:basic",
+      "version": "1.12.4",
+      "toolsId": "412c8f2e-f3f3-4201-8124-fdd271cf4ef1"
+    },
+    "dataSources": {
+      "menuData_alias": {
+        "uri": "model/menuData.json",
+        "type": "JSON"
+      }
+    }
+  },
+  "sap.ui": {
+    "technology": "UI5",
+    "icons": {
+      "icon": "",
+      "favIcon": "",
+      "phone": "",
+      "phone@2": "",
+      "tablet": "",
+      "tablet@2": ""
+    },
+    "deviceTypes": {
+      "desktop": true,
+      "tablet": true,
+      "phone": true
+    }
+  },
+  "sap.ui5": {
+    "flexEnabled": true,
+    "dependencies": {
+      "minUI5Version": "1.121.2",
+      "libs": {
+        "sap.m": {},
+        "sap.ui.core": {},
+        "sap.f": {},
+        "sap.suite.ui.generic.template": {},
+        "sap.ui.comp": {},
+        "sap.ui.generic.app": {},
+        "sap.ui.table": {},
+        "sap.ushell": {}
+      }
+    },
+    "contentDensities": {
+      "compact": true,
+      "cozy": true
+    },
+    "models": {
+      "i18n": {
+        "type": "sap.ui.model.resource.ResourceModel",
+        "settings": {
+          "bundleName": "warehousemanagement.i18n.i18n"
+        }
+      },
+      "": {
+        "type": "sap.ui.model.json.JSONModel",
+        "dataSource": "menuData_alias"
+      }
+    },
+    "resources": {
+      "css": [
+        {
+          "uri": "css/style.css"
+        }
+      ]
+    },
+    "routing": {
+      "config": {
+        "routerClass": "sap.m.routing.Router",
+        "viewType": "XML",
+        "async": true,
+        "viewPath": "warehousemanagement.view",
+        "controlAggregation": "pages",
+        "controlId": "app",
+        "clearControlAggregation": false
+      },
+      "routes": [
+ 
+        {
+          "name": "Home",
+          "pattern": "Home",
+          "target": [
+              "Home"
+          ]
+      },
+      {
+        "name": "Purchase",
+        "pattern": "Purchase",
+        "target": [
+            "Purchase"
+        ]
+    }
+      ],
+      "targets": {
+       
+        "Home": {
+          "viewType": "XML",
+          "transition": "slide",
+          "clearControlAggregation": false,
+          "viewId": "Home",
+          "viewName": "Home",
+          "viewPath": "warehousemanagement.view.Home"
+      },
+      "Purchase": {
+        "viewType": "XML",
+        "transition": "slide",
+        "clearControlAggregation": false,
+        "viewId": "Purchase",
+        "viewName": "Purchase",
+        "viewPath": "warehousemanagement.view.Inbound.Purchase"
+    }
+      }
+    },
+    "rootView": {
+      "viewName": "warehousemanagement.view.App",
+      "type": "XML",
+      "async": true,
+      "id": "App"
+    }
+  }
+}

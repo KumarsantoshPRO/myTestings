@@ -1,0 +1,41 @@
+{
+	"selectedKey": "page2",
+	"navigation": [
+		{
+			"title": "Home",
+			"icon": "sap-icon://home",
+			"expanded": true,
+			"key": "Home"
+		},
+		{
+			"title": "Inbound",
+			"icon": "sap-icon://decision",
+			"expanded": false,
+			"key": "Inbound",
+			"items": [
+				{
+					"title": "Purchase",
+					"key": "Purchase"
+				},
+				{
+					"title": "Production"
+				},
+				{
+					"title": "STO"
+				},
+				{
+					"title": "Packaging"
+				},
+				{
+					"title": "Non-STO Products"
+				}
+			]
+		} 
+	],
+	"fixedNavigation": [
+		{
+			"title": "Home",
+			"icon": "sap-icon://home"
+		} 
+	]
+}
