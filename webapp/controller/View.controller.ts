@@ -60,7 +60,7 @@ export default class View extends Controller {
     public onGeneratePDF(): void {
         debugger
         const jspdfLib = (window as any).jspdf;
-        if (!jspdfLib) return;
+        if (!jspdfLib) return;   
 
         const oModel = this.getView()?.getModel() as JSONModel;
         const oHeader = oModel.getProperty("/header");
