@@ -1,0 +1,157 @@
+<mvc:View
+    controllerName="my.app.generatebill.controller.View"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m"
+    xmlns:f="sap.ui.layout.form"
+    xmlns:core="sap.ui.core"
+    displayBlock="true"
+>
+    <Page
+        title="Quotation"
+        titleAlignment="Center"
+    >
+        <content>
+            <Panel
+                headerText="Quotation Details"
+                expandable="true"
+                expanded="true"
+                width="auto"
+                class="sapUiSmallMargin"
+            >
+                <f:SimpleForm
+                    editable="true"
+                    layout="ResponsiveGridLayout"
+                >
+                    <f:content>
+                        <Label text="Date" />
+                        <DatePicker
+                            value="{/Date}"
+                            valueFormat="dd-MM-yyyy"
+                            displayFormat="long"
+                        />
+
+                        <Label text="To (Customer Name)" />
+                        <Input
+                            value="{/ToCustomer}"
+                            placeholder="e.g., Mr. Patil"
+                        />
+
+                        <Label text="Location" />
+                        <Input
+                            value="{/Location}"
+                            placeholder="e.g., Bangalore"
+                        />
+
+                        <Label text="Subject" />
+                        <TextArea
+                            value="{/Subject}"
+                            rows="2"
+                            growing="true"
+                        />
+                       
+                    </f:content>
+                </f:SimpleForm>
+            </Panel>
+
+            <Panel
+                headerText="Additional Information"
+                expandable="true"
+                expanded="true"
+                width="auto"
+                class="sapUiSmallMargin"
+            >
+                <f:SimpleForm
+                    editable="true"
+                    layout="ResponsiveGridLayout"
+                >
+                    <f:content>
+                        <Label text="Notes" />
+                        <TextArea
+                            value="{/Notes}"
+                            rows="3"
+                            placeholder="Enter specific notes (e.g., 100% Advance)"
+                        />
+
+                        <Label text="Terms &amp; Conditions" />
+                        <TextArea
+                            value="{/TermsAndConditions}"
+                            rows="5"
+                        />
+                    </f:content>
+                </f:SimpleForm>
+            </Panel>
+
+            <Table
+                id="idProductsTable"
+                items="{/products}"
+            >
+                <headerToolbar>
+                    <OverflowToolbar>
+                        <Title text="Line Items" />
+                        <ToolbarSpacer />
+                        <Button
+                            icon="sap-icon://add"
+                            text="Add Row"
+                            press=".onAddRow"
+                        />
+                    </OverflowToolbar>
+                </headerToolbar>
+                <columns>
+                    <Column width="10%">
+                        <Text text="Sl.No" />
+                    </Column>
+                    <Column width="40%">
+                        <Text text="Particulars" />
+                    </Column>
+                    <Column
+                        hAlign="Center"
+                        width="15%"
+                    >
+                        <Text text="Qty" />
+                    </Column>
+                    <Column
+                        hAlign="Center"
+                        width="15%"
+                    >
+                        <Text text="Rate" />
+                    </Column>
+                    <Column
+                        hAlign="Center"
+                        width="15%"
+                    >
+                        <Text text="Total" />
+                    </Column>
+                </columns>
+                <items>
+                    <ColumnListItem>
+                        <cells>
+                            <Text
+                                text="{= ${/products}.indexOf(${path: ''}) + 1 }"
+                            />
+                            <Input value="{productName}" />
+                            <Input
+                                value="{quantity}"
+                                change=".onCalc"
+                            />
+                            <Input
+                                value="{price}"
+                                change=".onCalc"
+                            />
+                            <Text text="{total}" />
+                        </cells>
+                    </ColumnListItem>
+                </items>
+            </Table>
+        </content>
+        <footer>
+            <OverflowToolbar>
+                <ToolbarSpacer />
+                <Button
+                    text="Generate bill"
+                    type="Emphasized"
+                    press="onGeneratePDF"
+                />
+            </OverflowToolbar>
+        </footer>
+    </Page>
+</mvc:View>

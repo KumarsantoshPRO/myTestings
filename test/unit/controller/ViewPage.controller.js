@@ -1,0 +1,2 @@
+sap.ui.define(["my/app/generatebill/controller/View.controller"],function(e){"use strict";function t(e){return e&&e.__esModule&&typeof e.default!=="undefined"?e.default:e}const n=t(e);QUnit.module("View Controller");QUnit.test("I should test the View controller",function(e){const t=new n("View");t.onInit();e.ok(t)})});
+//# sourceMappingURL=ViewPage.controller.js.map

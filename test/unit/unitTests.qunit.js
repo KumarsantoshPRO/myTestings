@@ -1,0 +1,2 @@
+"use strict";QUnit.config.autostart=false;sap.ui.require([],function(){function e(e){return new Promise(function(t,i){sap.ui.require([e],function(i){if(!(i&&i.__esModule)){i=i===null||!(typeof i==="object"&&e.endsWith("/library"))?{default:i}:i;Object.defineProperty(i,"__esModule",{value:true})}t(i)},function(e){i(e)})})}void Promise.all([e("sap/ui/core/Core"),e("unit/controller/ViewPage.controller")]).then(([{default:e}])=>e.ready()).then(()=>{QUnit.start()})});
+//# sourceMappingURL=unitTests.qunit.js.map
