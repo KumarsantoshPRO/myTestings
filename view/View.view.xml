@@ -56,7 +56,7 @@
             <Panel
                 headerText="Additional Information"
                 expandable="true"
-                expanded="true"
+                expanded="false"
                 width="auto"
                 class="sapUiSmallMargin"
             >
