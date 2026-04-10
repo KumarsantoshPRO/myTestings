@@ -50,7 +50,6 @@
                             growing="true"
                             placeholder="e.g., Supply and Installment of camera"
                         />
-                       
                     </f:content>
                 </f:SimpleForm>
             </Panel>
@@ -87,6 +86,8 @@
             <Table
                 id="idProductsTable"
                 items="{/products}"
+                mode="Delete"
+                delete=".onDelete"
             >
                 <headerToolbar>
                     <OverflowToolbar>
@@ -99,8 +100,9 @@
                         />
                     </OverflowToolbar>
                 </headerToolbar>
+
                 <columns>
-                    <Column width="10%">
+                    <Column width="12%">
                         <Text text="Sl.No" />
                     </Column>
                     <Column width="40%">
@@ -125,6 +127,7 @@
                         <Text text="Total" />
                     </Column>
                 </columns>
+
                 <items>
                     <ColumnListItem>
                         <cells>
@@ -145,6 +148,16 @@
                     </ColumnListItem>
                 </items>
             </Table>
+            <OverflowToolbar>
+                <ToolbarSpacer />
+                <Title text="GST(18%):" />
+                <Title text="{/gst}" />
+            </OverflowToolbar>
+            <OverflowToolbar>
+                <ToolbarSpacer />
+                <Title text="Grand Total:" />
+                <Title text="{/totalSum}" />
+            </OverflowToolbar>
         </content>
         <footer>
             <OverflowToolbar>
