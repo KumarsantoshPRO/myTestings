@@ -94,10 +94,10 @@ export default class View extends Controller {
 
 
         });
-
+        const total = fGrandTotal + gstAmount;
         // 3. Set the Grand Total property for the footer
         oModel.setProperty("/gst", gstAmount.toFixed(2));
-        oModel.setProperty("/totalSum", (fGrandTotal + gstAmount).toFixed(2));
+        oModel.setProperty("/totalSum", total.toFixed(2));
 
         // Refresh model to ensure UI updates
         oModel.refresh();
