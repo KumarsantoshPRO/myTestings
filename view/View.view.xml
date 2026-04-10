@@ -25,28 +25,30 @@
                     <f:content>
                         <Label text="Date" />
                         <DatePicker
-                            value="{/Date}"
+                            value="{/header/Date}"
                             valueFormat="dd-MM-yyyy"
                             displayFormat="long"
+                            placeholder="dd-MM-yyyy"
                         />
 
                         <Label text="To (Customer Name)" />
                         <Input
-                            value="{/ToCustomer}"
+                            value="{/header/To}"
                             placeholder="e.g., Mr. Patil"
                         />
 
                         <Label text="Location" />
                         <Input
-                            value="{/Location}"
+                            value="{/header/Location}"
                             placeholder="e.g., Bangalore"
                         />
 
                         <Label text="Subject" />
                         <TextArea
-                            value="{/Subject}"
+                            value="{/header/Subject}"
                             rows="2"
                             growing="true"
+                            placeholder="e.g., Supply and Installment of camera"
                         />
                        
                     </f:content>
@@ -67,15 +69,16 @@
                     <f:content>
                         <Label text="Notes" />
                         <TextArea
-                            value="{/Notes}"
+                            value="{/header/Notes}"
                             rows="3"
-                            placeholder="Enter specific notes (e.g., 100% Advance)"
+                            placeholder="Enter specific notes (e.g., 18% GST included in Quotation)"
                         />
 
                         <Label text="Terms &amp; Conditions" />
                         <TextArea
-                            value="{/TermsAndConditions}"
+                            value="{/header/TermsAndConditions}"
                             rows="5"
+                            placeholder="Enter specific Terms and Condition (e.g., 100% Advance)"
                         />
                     </f:content>
                 </f:SimpleForm>

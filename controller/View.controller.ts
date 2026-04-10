@@ -11,11 +11,12 @@ export default class View extends Controller {
     public onInit(): void {
         const oData = {
             header: {
-                to: "",
-                sub: "",
-                date: " ",
-                notes: "",
-                terms: "",
+                To: "",
+                Date: "",
+                Location: "",
+                Subject: "",
+                Notes: "",
+                TermsAndConditions: "",
                 softwarePrereq: " "
             },
             products: [
@@ -91,21 +92,21 @@ export default class View extends Controller {
 
         // --- 2. TO / SUB / DATE SECTION ---
         doc.setFont("helvetica", "bold");
-        doc.text(`Date: ${oHeader.date}`, pageWidth - 14, 55, { align: 'right' }); //[span_12](end_span)
+        doc.text(`Date: ${oHeader.Date}`, pageWidth - 14, 55, { align: 'right' }); //[span_12](end_span)
 
         doc.text("To,", 14, 55);
         doc.setFont("helvetica", "normal");
-        doc.text(doc.splitTextToSize(oHeader.to, 80), 14, 60); //[span_13](end_span)
+        doc.text(doc.splitTextToSize(oHeader.To+","+oHeader.Location, 80), 14, 60); //[span_13](end_span)
 
         doc.setFont("helvetica", "bold");
-        doc.text("Sub: " + oHeader.sub, 14, 75); //[span_14](end_span)
+        doc.text("Sub: " + oHeader.Subject, 14, 75); //[span_14](end_span)
 
         // --- 3. TABLE SECTION ---
         const tableBody = aItems.map((item: any, index: number) => [
             index + 1,
             item.productName,
             item.quantity,
-            item.price.toFixed(2),
+            Number(item.price).toFixed(2).toString(),
             item.total
         ]);
 
@@ -113,7 +114,7 @@ export default class View extends Controller {
 
         (doc as any).autoTable({
             startY: 82,
-             head: [['SI. No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']], //[span_15](end_span)
+             head: [['SI.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']], //[span_15](end_span)
             body: tableBody,
             theme: 'grid',
             headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], lineWidth: 0.1 },
@@ -131,13 +132,13 @@ export default class View extends Controller {
         doc.setFontSize(9);
         doc.text("Terms & Conditions:", 14, finalY + 20); //[span_17](end_span)
         doc.setFont("helvetica", "normal");
-        doc.text(doc.splitTextToSize(oHeader.notes, pageWidth - 28), 14, finalY + 26);
-        doc.text(doc.splitTextToSize(oHeader.terms, pageWidth - 28), 14, finalY + 42); //[span_18](end_span)
+        doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 26);
+        // doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 42); //[span_18](end_span)
 
         doc.setFont("helvetica", "bold");
         doc.text("Notes:", 14, finalY + 60); //[span_19](end_span)
         doc.setFont("helvetica", "normal");
-        doc.text(doc.splitTextToSize(oHeader.softwarePrereq, pageWidth - 28), 14, finalY + 65);
+        doc.text(doc.splitTextToSize(oHeader.Notes, pageWidth - 28), 14, finalY + 65);
 
         // --- 5. SIGNATURE SECTION ---
         const sigY = doc.internal.pageSize.height - 40;
