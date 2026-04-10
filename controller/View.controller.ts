@@ -237,7 +237,7 @@ export default class View extends Controller {
             doc.setFont("helvetica", "bold");
             doc.text("Notes:", 14, finalY + 70); //[span_19](end_span)
             doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oHeader.Notes, pageWidth - 28), 14, finalY + 65);
+            doc.text(doc.splitTextToSize(oHeader.Notes, pageWidth - 28), 14, finalY + 75);
 
             // --- 5. SIGNATURE SECTION ---
             const sigY = doc.internal.pageSize.height - 45;
