@@ -91,10 +91,10 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         gstAmount = gstAmount + fRowTotal * 0.18;
         fGrandTotal += fRowTotal;
       });
-      const total = fGrandTotal + gstAmount;
+
       // 3. Set the Grand Total property for the footer
       oModel.setProperty("/gst", gstAmount.toFixed(2));
-      oModel.setProperty("/totalSum", total.toFixed(2));
+      oModel.setProperty("/totalSum", (fGrandTotal + gstAmount).toFixed(2).toString());
 
       // Refresh model to ensure UI updates
       oModel.refresh();
