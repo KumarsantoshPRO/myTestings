@@ -96,8 +96,9 @@ export default class View extends Controller {
 
         doc.text("To,", 14, 55);
         doc.setFont("helvetica", "normal");
-        doc.text(doc.splitTextToSize(oHeader.To + "," + oHeader.Location, 80), 14, 60); //[span_13](end_span)
-
+        doc.text(doc.splitTextToSize(oHeader.To+"\n"+oHeader.Location, 80), 14, 60); //[span_13](end_span)
+         
+        
         doc.setFont("helvetica", "bold");
         doc.text("Sub: " + oHeader.Subject, 14, 75); //[span_14](end_span)
 
