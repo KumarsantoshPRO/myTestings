@@ -29,6 +29,7 @@
                             valueFormat="dd-MM-yyyy"
                             displayFormat="long"
                             placeholder="dd-MM-yyyy"
+                            
                         />
 
                         <Label text="To (Customer Name)" />

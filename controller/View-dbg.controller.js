@@ -5,6 +5,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
     constructor: function constructor() {
       Controller.prototype.constructor.apply(this, arguments);
       this.sLogoBase64 = "";
+      this.sSignaturBase64 = "";
     },
     onInit: function _onInit() {
       const oData = {
@@ -25,6 +26,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       };
       this.getView()?.setModel(new JSONModel(oData));
       this._loadLocalLogo("img/logo.jpg");
+      this._loadSignature("img/Signature.jpg");
     },
     _loadLocalLogo: function _loadLocalLogo(sRelativePath) {
       const sFullUrl = sap.ui.require.toUrl("my/app/generatebill/" + sRelativePath);
@@ -33,6 +35,20 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         const reader = new FileReader();
         reader.onloadend = () => {
           this.sLogoBase64 = reader.result;
+        };
+        reader.readAsDataURL(xhr.response);
+      };
+      xhr.open("GET", sFullUrl);
+      xhr.responseType = "blob";
+      xhr.send();
+    },
+    _loadSignature: function _loadSignature(sSigRelativePath) {
+      const sFullUrl = sap.ui.require.toUrl("my/app/generatebill/" + sSigRelativePath);
+      const xhr = new XMLHttpRequest();
+      xhr.onload = () => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          this.sSignaturBase64 = reader.result;
         };
         reader.readAsDataURL(xhr.response);
       };
@@ -106,9 +122,11 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       // 1. Validate Header Fields
       const oHeader = oData.header;
       for (const key in oHeader) {
-        if (!oHeader[key] || oHeader[key].trim() === "") {
-          MessageBox.error(`Please fill in the header field: ${key}`);
-          return false;
+        if (key !== "Notes") {
+          if (!oHeader[key] || oHeader[key].trim() === "") {
+            MessageBox.error(`Please fill in the header field: ${key}`);
+            return false;
+          }
         }
       }
 
@@ -222,7 +240,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
 
         // --- 4. TERMS / NOTES / PREREQUISITES ---
         doc.setFontSize(9);
-        doc.text("Terms & Conditions:", 14, finalY + 20); //[span_17](end_span)
+        doc.text("Terms & Conditions:", 14, finalY + 30); //[span_17](end_span)
         doc.setFont("helvetica", "normal");
         doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 26);
         // doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 42); //[span_18](end_span)
@@ -230,15 +248,19 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         doc.setFont("helvetica", "bold");
         doc.text("Notes:", 14, finalY + 60); //[span_19](end_span)
         doc.setFont("helvetica", "normal");
-        doc.text(doc.splitTextToSize(oHeader.Notes, pageWidth - 28), 14, finalY + 65);
+        doc.text(doc.splitTextToSize(oHeader.Notes, pageWidth - 38), 14, finalY + 65);
 
         // --- 5. SIGNATURE SECTION ---
-        const sigY = doc.internal.pageSize.height - 40;
-        doc.setFont("helvetica", "bold");
-        doc.text("Yours faithfully", pageWidth - 70, sigY); //[span_20](end_span)
-        doc.text("For IN-TELECOM SERVICE", pageWidth - 70, sigY + 5);
-        doc.text("VR PATIL", pageWidth - 70, sigY + 20);
-        doc.text("Senior Managing Executive", pageWidth - 70, sigY + 25);
+        const sigY = doc.internal.pageSize.height - 50;
+        if (this.sSignaturBase64) {
+          doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 70, sigY, 70, 25);
+        }
+        // doc.setFont("helvetica", "bold");
+        // doc.text("Yours faithfully", pageWidth - 70, sigY); //[span_20](end_span)
+        // doc.text("For IN-TELECOM SERVICE", pageWidth - 70, sigY + 5);
+        // doc.text("VR PATIL", pageWidth - 70, sigY + 20);
+        // doc.text("Senior Managing Executive", pageWidth - 70, sigY + 25);
+
         window.open(doc.output("bloburl"), "_blank");
       }
     }
