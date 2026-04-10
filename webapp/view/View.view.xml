@@ -25,30 +25,32 @@
                     <f:content>
                         <Label text="Date" />
                         <DatePicker
-                            value="{/Date}"
+                            value="{/header/Date}"
                             valueFormat="dd-MM-yyyy"
                             displayFormat="long"
+                            placeholder="dd-MM-yyyy"
+                            
                         />
 
                         <Label text="To (Customer Name)" />
-                        <Input
-                            value="{/ToCustomer}"
+                        <TextArea
+                            value="{/header/To}"
                             placeholder="e.g., Mr. Patil"
                         />
 
                         <Label text="Location" />
                         <Input
-                            value="{/Location}"
+                            value="{/header/Location}"
                             placeholder="e.g., Bangalore"
                         />
 
                         <Label text="Subject" />
                         <TextArea
-                            value="{/Subject}"
+                            value="{/header/Subject}"
                             rows="2"
                             growing="true"
+                            placeholder="e.g., Supply and Installment of camera"
                         />
-                       
                     </f:content>
                 </f:SimpleForm>
             </Panel>
@@ -56,7 +58,7 @@
             <Panel
                 headerText="Additional Information"
                 expandable="true"
-                expanded="true"
+                expanded="false"
                 width="auto"
                 class="sapUiSmallMargin"
             >
@@ -67,15 +69,16 @@
                     <f:content>
                         <Label text="Notes" />
                         <TextArea
-                            value="{/Notes}"
+                            value="{/header/Notes}"
                             rows="3"
-                            placeholder="Enter specific notes (e.g., 100% Advance)"
+                            placeholder="Enter specific notes (e.g., 18% GST included in Quotation)"
                         />
 
                         <Label text="Terms &amp; Conditions" />
                         <TextArea
-                            value="{/TermsAndConditions}"
+                            value="{/header/TermsAndConditions}"
                             rows="5"
+                            placeholder="Enter specific Terms and Condition (e.g., 100% Advance)"
                         />
                     </f:content>
                 </f:SimpleForm>
@@ -84,6 +87,8 @@
             <Table
                 id="idProductsTable"
                 items="{/products}"
+                mode="Delete"
+                delete=".onDelete"
             >
                 <headerToolbar>
                     <OverflowToolbar>
@@ -96,8 +101,9 @@
                         />
                     </OverflowToolbar>
                 </headerToolbar>
+
                 <columns>
-                    <Column width="10%">
+                    <Column width="12%">
                         <Text text="Sl.No" />
                     </Column>
                     <Column width="40%">
@@ -122,6 +128,7 @@
                         <Text text="Total" />
                     </Column>
                 </columns>
+
                 <items>
                     <ColumnListItem>
                         <cells>
@@ -142,6 +149,16 @@
                     </ColumnListItem>
                 </items>
             </Table>
+            <OverflowToolbar>
+                <ToolbarSpacer />
+                <Title text="GST(18%):" />
+                <Title text="{/gst}" />
+            </OverflowToolbar>
+            <OverflowToolbar>
+                <ToolbarSpacer />
+                <Title text="Grand Total:" />
+                <Title text="{/totalSum}" />
+            </OverflowToolbar>
         </content>
         <footer>
             <OverflowToolbar>
