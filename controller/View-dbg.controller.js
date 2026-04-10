@@ -115,6 +115,8 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel"], fun
       // --- 3. TABLE SECTION ---
       const tableBody = aItems.map((item, index) => [index + 1, item.productName, item.quantity, Number(item.price).toFixed(2).toString(), item.total]);
       const subtotal = aItems.reduce((acc, cur) => acc + parseFloat(cur.total || 0), 0);
+      const gstAmount = Number(subtotal) * 0.18;
+      const grandTotal = Number(subtotal) + Number(gstAmount);
       doc.autoTable({
         startY: 82,
         head: [['SI.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']],
@@ -143,7 +145,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel"], fun
       // Subtotal and GST Note
       doc.setFont("helvetica", "bold");
       doc.text("Total + (18% GST to be included)", 14, finalY + 10); //[span_16](end_span)
-      doc.text(subtotal.toFixed(2), pageWidth - 14, finalY + 10, {
+      doc.text(grandTotal.toFixed(2), pageWidth - 14, finalY + 10, {
         align: 'right'
       });
 

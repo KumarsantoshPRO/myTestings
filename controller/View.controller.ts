@@ -61,7 +61,7 @@ export default class View extends Controller {
     public onGeneratePDF(): void {
         debugger
         const jspdfLib = (window as any).jspdf;
-        if (!jspdfLib) return;   
+        if (!jspdfLib) return;
 
         const oModel = this.getView()?.getModel() as JSONModel;
         const oHeader = oModel.getProperty("/header");
@@ -96,7 +96,7 @@ export default class View extends Controller {
 
         doc.text("To,", 14, 55);
         doc.setFont("helvetica", "normal");
-        doc.text(doc.splitTextToSize(oHeader.To+","+oHeader.Location, 80), 14, 60); //[span_13](end_span)
+        doc.text(doc.splitTextToSize(oHeader.To + "," + oHeader.Location, 80), 14, 60); //[span_13](end_span)
 
         doc.setFont("helvetica", "bold");
         doc.text("Sub: " + oHeader.Subject, 14, 75); //[span_14](end_span)
@@ -111,10 +111,11 @@ export default class View extends Controller {
         ]);
 
         const subtotal = aItems.reduce((acc: number, cur: any) => acc + parseFloat(cur.total || 0), 0);
-
+        const gstAmount = Number(subtotal) * 0.18;
+        const grandTotal = Number(subtotal) + Number(gstAmount);
         (doc as any).autoTable({
             startY: 82,
-             head: [['SI.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']], //[span_15](end_span)
+            head: [['SI.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']], //[span_15](end_span)
             body: tableBody,
             theme: 'grid',
             headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], lineWidth: 0.1 },
@@ -126,7 +127,7 @@ export default class View extends Controller {
         // Subtotal and GST Note
         doc.setFont("helvetica", "bold");
         doc.text("Total + (18% GST to be included)", 14, finalY + 10); //[span_16](end_span)
-        doc.text(subtotal.toFixed(2), pageWidth - 14, finalY + 10, { align: 'right' });
+        doc.text(grandTotal.toFixed(2), pageWidth - 14, finalY + 10, { align: 'right' });
 
         // --- 4. TERMS / NOTES / PREREQUISITES ---
         doc.setFontSize(9);
