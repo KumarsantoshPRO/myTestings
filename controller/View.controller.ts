@@ -231,19 +231,19 @@ export default class View extends Controller {
             doc.setFontSize(9);
             doc.text("Terms & Conditions:", 14, finalY + 30); //[span_17](end_span)
             doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 26);
+            doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 36);
             // doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 42); //[span_18](end_span)
 
             doc.setFont("helvetica", "bold");
-            doc.text("Notes:", 14, finalY + 60); //[span_19](end_span)
+            doc.text("Notes:", 14, finalY + 70); //[span_19](end_span)
             doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oHeader.Notes, pageWidth - 38), 14, finalY + 65);
+            doc.text(doc.splitTextToSize(oHeader.Notes, pageWidth - 28), 14, finalY + 65);
 
             // --- 5. SIGNATURE SECTION ---
-            const sigY = doc.internal.pageSize.height - 50;
+            const sigY = doc.internal.pageSize.height - 45;
 
             if (this.sSignaturBase64) {
-                doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 70, sigY, 70, 25);
+                doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, sigY, 70, 25);
             }
             // doc.setFont("helvetica", "bold");
             // doc.text("Yours faithfully", pageWidth - 70, sigY); //[span_20](end_span)
