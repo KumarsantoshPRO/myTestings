@@ -29,7 +29,6 @@
                             valueFormat="dd-MM-yyyy"
                             displayFormat="long"
                             placeholder="dd-MM-yyyy"
-                            
                         />
 
                         <Label text="To (Customer Name)" />
@@ -79,6 +78,11 @@
                             value="{/header/TermsAndConditions}"
                             rows="5"
                             placeholder="Enter specific Terms and Condition (e.g., 100% Advance)"
+                        />
+                        <Label text="Bank Details" />
+                        <TextArea
+                            value="{/header/BankDetails}"
+                            rows="7"
                         />
                     </f:content>
                 </f:SimpleForm>
@@ -164,9 +168,25 @@
             <OverflowToolbar>
                 <ToolbarSpacer />
                 <Button
-                    text="Generate bill"
-                    type="Emphasized"
+                    icon="sap-icon://pdf-attachment"
+                    text="Generate Quotation"
+                    type="Transparent"
                     press="onGeneratePDF"
+                />
+                <CheckBox
+                    id="chkTotal"
+                    text="Total + GST"
+                    select="onTotalSelect"
+                />
+                <CheckBox
+                    id="chkGST"
+                    text="GST Amount"
+                    select="onGSTSelect"
+                />
+                <CheckBox
+                    id="chkBankDetail"
+                    text="Bank Details"
+                    select="onGSTSelect"
                 />
             </OverflowToolbar>
         </footer>
