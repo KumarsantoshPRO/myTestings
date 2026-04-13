@@ -29,7 +29,6 @@
                             valueFormat="dd-MM-yyyy"
                             displayFormat="long"
                             placeholder="dd-MM-yyyy"
-                            
                         />
 
                         <Label text="To (Customer Name)" />
@@ -163,8 +162,18 @@
         <footer>
             <OverflowToolbar>
                 <ToolbarSpacer />
+                <CheckBox
+                    id="chkGST"
+                    text="Show GST Amount"
+                    select="onGSTSelect"
+                />
+                <CheckBox
+                    id="chkTotal"
+                    text="Show Total + GST"
+                    select="onTotalSelect"
+                />
                 <Button
-                    text="Generate bill"
+                    text="Generate Quotation"
                     type="Emphasized"
                     press="onGeneratePDF"
                 />
