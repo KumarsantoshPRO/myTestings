@@ -167,6 +167,17 @@
         <footer>
             <OverflowToolbar>
                 <ToolbarSpacer />
+                <Button
+                    icon="sap-icon://pdf-attachment"
+                    text="Generate Quotation"
+                    type="Transparent"
+                    press="onGeneratePDF"
+                />
+                <CheckBox
+                    id="chkTotal"
+                    text="Show Total + GST"
+                    select="onTotalSelect"
+                />
                 <CheckBox
                     id="chkBankDetail"
                     text="Show Bank Details"
@@ -176,18 +187,6 @@
                     id="chkGST"
                     text="Show GST Amount"
                     select="onGSTSelect"
-                />
-                <CheckBox
-                    id="chkTotal"
-                    text="Show Total + GST"
-                    select="onTotalSelect"
-                />
-                <Button
-                    icon="sap-icon://pdf-attachment"
-                    text="Generate Quotation"
-                
-                    type="Transparent"
-                    press="onGeneratePDF"
                 />
             </OverflowToolbar>
         </footer>
