@@ -79,6 +79,11 @@
                             rows="5"
                             placeholder="Enter specific Terms and Condition (e.g., 100% Advance)"
                         />
+                        <Label text="Bank Details" />
+                        <TextArea
+                            value="{/header/BankDetails}"
+                            rows="7"
+                        />
                     </f:content>
                 </f:SimpleForm>
             </Panel>
@@ -163,6 +168,11 @@
             <OverflowToolbar>
                 <ToolbarSpacer />
                 <CheckBox
+                    id="chkBankDetail"
+                    text="Show Bank Details"
+                    select="onGSTSelect"
+                />
+                <CheckBox
                     id="chkGST"
                     text="Show GST Amount"
                     select="onGSTSelect"
@@ -173,8 +183,10 @@
                     select="onTotalSelect"
                 />
                 <Button
+                    icon="sap-icon://pdf-attachment"
                     text="Generate Quotation"
-                    type="Emphasized"
+                
+                    type="Transparent"
                     press="onGeneratePDF"
                 />
             </OverflowToolbar>

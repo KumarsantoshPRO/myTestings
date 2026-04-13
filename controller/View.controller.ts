@@ -18,7 +18,8 @@ export default class View extends Controller {
                 Location: "",
                 Subject: "",
                 Notes: "",
-                TermsAndConditions: ""
+                TermsAndConditions: "",
+                BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
             },
             products: [
                 { productName: "", quantity: 0, price: 0, total: "" }
@@ -247,9 +248,21 @@ export default class View extends Controller {
 
             // Terms & Conditions ---
             doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
             doc.text("Terms & Conditions:", 14, finalY + 30);
             doc.setFont("helvetica", "normal");
             doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 36);
+
+            // Bank Details ---
+            const bBankDetails = (this.getView()?.byId("chkBankDetail") as CheckBox).getSelected();
+            if (bBankDetails) {
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "bold");
+                doc.text("Bank Details:", pageWidth - 80, finalY + 30);
+                doc.setFont("helvetica", "normal");
+                doc.text(doc.splitTextToSize(oHeader.BankDetails, pageWidth - 80), pageWidth - 80, finalY + 36);
+            }
+
 
             // Notes
             doc.setFont("helvetica", "bold");
