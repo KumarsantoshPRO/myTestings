@@ -165,7 +165,7 @@ export default class View extends Controller {
     }
 
     public onGeneratePDF(): void {
-        if (!this.validateForm()) {
+        if (this.validateForm()) {
             const jspdfLib = (window as any).jspdf;
             if (!jspdfLib) return;
 

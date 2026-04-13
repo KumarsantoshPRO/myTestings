@@ -157,7 +157,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       return true; // All checks passed
     },
     onGeneratePDF: function _onGeneratePDF() {
-      if (!this.validateForm()) {
+      if (this.validateForm()) {
         const jspdfLib = window.jspdf;
         if (!jspdfLib) return;
         const oModel = this.getView()?.getModel();

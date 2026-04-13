@@ -175,17 +175,17 @@
                 />
                 <CheckBox
                     id="chkTotal"
-                    text="Show Total + GST"
+                    text="Total + GST"
                     select="onTotalSelect"
                 />
                 <CheckBox
-                    id="chkBankDetail"
-                    text="Show Bank Details"
+                    id="chkGST"
+                    text="GST Amount"
                     select="onGSTSelect"
                 />
                 <CheckBox
-                    id="chkGST"
-                    text="Show GST Amount"
+                    id="chkBankDetail"
+                    text="Bank Details"
                     select="onGSTSelect"
                 />
             </OverflowToolbar>
