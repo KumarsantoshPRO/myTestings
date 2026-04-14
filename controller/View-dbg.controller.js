@@ -28,6 +28,11 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       this.getView()?.setModel(new JSONModel(oData));
       this._loadLocalLogo("img/logo.jpg");
       this._loadSignature("img/Signature.jpg");
+      // (this.getView()?.byId("idPage") as Page).setTitle("Quotation");
+      (this.getView()?.byId("idBtnQuotation")).setVisible(true);
+      (this.getView()?.byId("idBtnInvoice")).setVisible(false);
+      (this.getView()?.byId("idOPSQuoteTaxInc")).setVisible(false);
+      (this.getView()?.byId("idTaxSec")).setVisible(false);
     },
     _loadLocalLogo: function _loadLocalLogo(sRelativePath) {
       const sFullUrl = sap.ui.require.toUrl("my/app/generatebill/" + sRelativePath);
@@ -282,6 +287,51 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, sigY, 70, 25);
         }
         window.open(doc.output("bloburl"), "_blank");
+      }
+    },
+    onRadioSelect: function _onRadioSelect(oEvent) {
+      // Get the index of the selected button (0 for first, 1 for second)
+      const iSelectedIndex = oEvent.getParameter("selectedIndex");
+
+      // Alternatively, get the specific RadioButton control
+      // const oSelectedButton = oEvent.getSource().getSelectedButton();
+      // const sText = oSelectedButton.getText();
+
+      const OPSQuote1 = this.getView()?.byId("idOPSQuote1");
+      const OPSQuote2 = this.getView()?.byId("idOPSQuote2");
+      const OPSQuote3 = this.getView()?.byId("idOPSQuoteTaxInc");
+      const OPSTaxInvc = this.getView()?.byId("idTaxSec");
+      const QuotationSec = this.getView()?.byId("idQuotationSec");
+      const idQuotation = this.getView()?.byId("idBtnQuotation");
+      const idInvoice = this.getView()?.byId("idBtnInvoice");
+      const chkBankDetail = this.getView()?.byId("chkBankDetail");
+      const chkGST = this.getView()?.byId("chkGST");
+      const chkTotal = this.getView()?.byId("chkTotal");
+      // Logic based on selection
+      if (iSelectedIndex === 0) {
+        // Quotation
+        OPSQuote1.setVisible(true);
+        OPSQuote2.setVisible(true);
+        QuotationSec.setVisible(true);
+        OPSQuote3.setVisible(false);
+        OPSTaxInvc.setVisible(false);
+        idQuotation.setVisible(true);
+        idInvoice.setVisible(false);
+        chkBankDetail.setVisible(true);
+        chkGST.setVisible(true);
+        chkTotal.setVisible(true);
+      } else {
+        // TAX-INVOICE
+        OPSQuote1.setVisible(false);
+        OPSQuote2.setVisible(false);
+        QuotationSec.setVisible(false);
+        OPSQuote3.setVisible(true);
+        OPSTaxInvc.setVisible(true);
+        idQuotation.setVisible(false);
+        idInvoice.setVisible(true);
+        chkBankDetail.setVisible(false);
+        chkGST.setVisible(false);
+        chkTotal.setVisible(false);
       }
     }
   });

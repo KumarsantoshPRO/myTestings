@@ -2,6 +2,12 @@ import Controller from "sap/ui/core/mvc/Controller";
 import JSONModel from "sap/ui/model/json/JSONModel";
 import MessageBox from "sap/m/MessageBox";
 import CheckBox from "sap/m/CheckBox";
+import { RadioButtonGroup$SelectEvent } from "sap/m/RadioButtonGroup";
+import Panel from "sap/m/Panel";
+import Page from "sap/m/Page";
+import OverflowToolbar from "sap/m/OverflowToolbar";
+import Button from "sap/m/Button";
+import ObjectPageSection from "sap/uxap/ObjectPageSection";
 
 declare var jspdf: any;
 
@@ -28,6 +34,11 @@ export default class View extends Controller {
         this.getView()?.setModel(new JSONModel(oData));
         this._loadLocalLogo("img/logo.jpg");
         this._loadSignature("img/Signature.jpg");
+        // (this.getView()?.byId("idPage") as Page).setTitle("Quotation");
+        (this.getView()?.byId("idBtnQuotation") as Button).setVisible(true);
+        (this.getView()?.byId("idBtnInvoice") as Button).setVisible(false);
+        (this.getView()?.byId("idOPSQuoteTaxInc") as ObjectPageSection).setVisible(false);
+        (this.getView()?.byId("idTaxSec") as ObjectPageSection).setVisible(false);
     }
 
     private _loadLocalLogo(sRelativePath: string): void {
@@ -87,8 +98,6 @@ export default class View extends Controller {
         oModel.setProperty("/products", aProducts);
         this.onCalc();
     }
-
-
     public onCalc(): void {
         const oModel = this.getView()?.getModel() as JSONModel;
         const aProducts = oModel.getProperty("/products");
@@ -163,7 +172,6 @@ export default class View extends Controller {
 
         return true; // All checks passed
     }
-
     public onGeneratePDF(): void {
         if (this.validateForm()) {
             const jspdfLib = (window as any).jspdf;
@@ -279,4 +287,56 @@ export default class View extends Controller {
             window.open(doc.output("bloburl"), "_blank");
         }
     }
+
+    public onRadioSelect(oEvent: RadioButtonGroup$SelectEvent): void {
+        // Get the index of the selected button (0 for first, 1 for second)
+        const iSelectedIndex = oEvent.getParameter("selectedIndex");
+
+        // Alternatively, get the specific RadioButton control
+        // const oSelectedButton = oEvent.getSource().getSelectedButton();
+        // const sText = oSelectedButton.getText();
+
+
+        const OPSQuote1 = this.getView()?.byId("idOPSQuote1") as ObjectPageSection;
+        const OPSQuote2 = this.getView()?.byId("idOPSQuote2") as ObjectPageSection;
+        const OPSQuote3 = this.getView()?.byId("idOPSQuoteTaxInc") as ObjectPageSection;
+        const OPSTaxInvc = this.getView()?.byId("idTaxSec") as ObjectPageSection;
+        const QuotationSec = this.getView()?.byId("idQuotationSec") as ObjectPageSection;
+
+        const idQuotation = this.getView()?.byId("idBtnQuotation") as Button;
+        const idInvoice = this.getView()?.byId("idBtnInvoice") as Button;
+        const chkBankDetail = this.getView()?.byId("chkBankDetail") as CheckBox;
+        const chkGST = this.getView()?.byId("chkGST") as CheckBox;
+        const chkTotal = this.getView()?.byId("chkTotal") as CheckBox;
+        // Logic based on selection
+        if (iSelectedIndex === 0) {
+            // Quotation
+            OPSQuote1.setVisible(true);
+            OPSQuote2.setVisible(true);
+            QuotationSec.setVisible(true);
+            OPSQuote3.setVisible(false);
+
+            OPSTaxInvc.setVisible(false);
+            idQuotation.setVisible(true);
+            idInvoice.setVisible(false);
+            chkBankDetail.setVisible(true);
+            chkGST.setVisible(true);
+            chkTotal.setVisible(true);
+
+        } else {
+            // TAX-INVOICE
+            OPSQuote1.setVisible(false);
+            OPSQuote2.setVisible(false);
+            QuotationSec.setVisible(false);
+            OPSQuote3.setVisible(true);
+            OPSTaxInvc.setVisible(true);
+            idQuotation.setVisible(false);
+            idInvoice.setVisible(true);
+            chkBankDetail.setVisible(false);
+            chkGST.setVisible(false);
+            chkTotal.setVisible(false);
+
+        }
+    }
+
 }

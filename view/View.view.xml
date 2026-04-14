@@ -4,17 +4,429 @@
     xmlns="sap.m"
     xmlns:f="sap.ui.layout.form"
     xmlns:core="sap.ui.core"
+    xmlns:uxap="sap.uxap"
     displayBlock="true"
 >
-    <Page
-        title="Quotation"
+    <uxap:ObjectPageLayout
+        id="ObjectPageLayout"
+        upperCaseAnchorBar="false"
+        showFooter="true"
+    >
+        <uxap:headerTitle>
+            <uxap:ObjectPageHeader objectTitle="IN-TELECOM SERVICES">
+                <RadioButtonGroup
+                    id="myRadioButtonGroup"
+                    select=".onRadioSelect"
+                >
+                    <buttons>
+                        <RadioButton
+                            id="idRBQuote"
+                            text="Quotation"
+                        />
+                        <RadioButton
+                            id="idTaxInv"
+                            text="TAX-INVOICE"
+                        />
+                    </buttons>
+                </RadioButtonGroup>
+            </uxap:ObjectPageHeader>
+        </uxap:headerTitle>
+
+        <uxap:sections>
+            <uxap:ObjectPageSection
+                id="idOPSQuote1"
+                titleUppercase="false"
+                title="Quotation Details"
+            >
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection
+                        title="Quotation Details"
+                        titleUppercase="false"
+                    >
+                        <f:SimpleForm
+                            editable="true"
+                            layout="ResponsiveGridLayout"
+                        >
+                            <f:content>
+                                <Label text="Date" />
+                                <DatePicker
+                                    value="{/header/Date}"
+                                    valueFormat="dd-MM-yyyy"
+                                    displayFormat="long"
+                                    placeholder="dd-MM-yyyy"
+                                />
+
+                                <Label text="To (Customer Name)" />
+                                <TextArea
+                                    value="{/header/To}"
+                                    placeholder="e.g., Mr. Patil"
+                                />
+
+                                <Label text="Location" />
+                                <Input
+                                    value="{/header/Location}"
+                                    placeholder="e.g., Bangalore"
+                                />
+
+                                <Label text="Subject" />
+                                <TextArea
+                                    value="{/header/Subject}"
+                                    rows="2"
+                                    growing="true"
+                                    placeholder="e.g., Supply and Installment of camera"
+                                />
+                            </f:content>
+                        </f:SimpleForm>
+                    </uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+
+            <uxap:ObjectPageSection
+                id="idOPSQuote2"
+                titleUppercase="false"
+                title="Additional Information"
+            >
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection
+                        title="Additional Information"
+                        titleUppercase="false"
+                    >
+                        <f:SimpleForm
+                            editable="true"
+                            layout="ResponsiveGridLayout"
+                        >
+                            <f:content>
+                                <Label text="Notes" />
+                                <TextArea
+                                    value="{/header/Notes}"
+                                    rows="3"
+                                    placeholder="Enter specific notes (e.g., 18% GST included in Quotation)"
+                                />
+
+                                <Label text="Terms &amp; Conditions" />
+                                <TextArea
+                                    value="{/header/TermsAndConditions}"
+                                    rows="5"
+                                    placeholder="Enter specific Terms and Condition (e.g., 100% Advance)"
+                                />
+                                <Label text="Bank Details" />
+                                <TextArea
+                                    value="{/header/BankDetails}"
+                                    rows="7"
+                                />
+                            </f:content>
+                        </f:SimpleForm>
+                    </uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+
+            <uxap:ObjectPageSection
+                id="idOPSQuoteTaxInc"
+                titleUppercase="false"
+                title="Tax Invoice Details"
+            >
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection
+                        title="Tax Invoice Details"
+                        titleUppercase="false"
+                    >
+                        <f:SimpleForm
+                            editable="true"
+                            layout="ResponsiveGridLayout"
+                        >
+                            <f:content>
+                                <Label text="To" />
+                                <TextArea
+                                    value="{/taxHeader/To}"
+                                    rows="3"
+                                    placeholder="Name and Address"
+                                />
+
+                                <Label text="GST No" />
+                                <Input
+                                    value="{/taxHeader/GSTNo}"
+                                    placeholder="Enter GST No"
+                                />
+                                <Label text="Invoice No" />
+                                <Input
+                                    value="{/taxHeader/InvoiceNo}"
+                                    placeholder="Enter Invoice No"
+                                />
+                                <Label text="Date" />
+                                <DatePicker
+                                    value="{/taxHeader/Date}"
+                                    valueFormat="dd-MM-yyyy"
+                                    displayFormat="long"
+                                    placeholder="dd-MM-yyyy"
+                                />
+                                <Label text="PO No" />
+                                <Input
+                                    value="{/taxHeader/PONo}"
+                                    placeholder="Enter PO No"
+                                />
+                                <Label text="PO Date" />
+                                <Input
+                                    value="{/taxHeader/PODate}"
+                                    placeholder="Enter PO Date"
+                                />
+                            </f:content>
+                        </f:SimpleForm>
+                    </uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+
+            <uxap:ObjectPageSection
+                id="idQuotationSec"
+                titleUppercase="false"
+                title="Quotation - Particulars"
+            >
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection
+                        title="Quotation - Particulars"
+                        titleUppercase="false"
+                    >
+                        <VBox>
+                            <Table
+                                id="idProductsTable"
+                                items="{/products}"
+                                mode="Delete"
+                                delete=".onDelete"
+                            >
+                                <headerToolbar>
+                                    <OverflowToolbar>
+                                        <Title text="Line Items" />
+                                        <ToolbarSpacer />
+                                        <Button
+                                            icon="sap-icon://add"
+                                            text="Add Row"
+                                            press=".onAddRow"
+                                        />
+                                    </OverflowToolbar>
+                                </headerToolbar>
+
+                                <columns>
+                                    <Column width="12%">
+                                        <Text text="Sl.No" />
+                                    </Column>
+                                    <Column width="40%">
+                                        <Text text="Particulars" />
+                                    </Column>
+                                    <Column
+                                        hAlign="Center"
+                                        width="15%"
+                                    >
+                                        <Text text="Qty" />
+                                    </Column>
+                                    <Column
+                                        hAlign="Center"
+                                        width="15%"
+                                    >
+                                        <Text text="Rate" />
+                                    </Column>
+                                    <Column
+                                        hAlign="Center"
+                                        width="15%"
+                                    >
+                                        <Text text="Total" />
+                                    </Column>
+                                </columns>
+
+                                <items>
+                                    <ColumnListItem>
+                                        <cells>
+                                            <Text
+                                                text="{= ${/products}.indexOf(${path: ''}) + 1 }"
+                                            />
+                                            <Input value="{productName}" />
+                                            <Input
+                                                value="{quantity}"
+                                                change=".onCalc"
+                                            />
+                                            <Input
+                                                value="{price}"
+                                                change=".onCalc"
+                                            />
+                                            <Text text="{total}" />
+                                        </cells>
+                                    </ColumnListItem>
+                                </items>
+                            </Table>
+                            <OverflowToolbar>
+                                <ToolbarSpacer />
+                                <Title text="GST(18%):" />
+                                <Title text="{/gst}" />
+                            </OverflowToolbar>
+                            <OverflowToolbar>
+                                <ToolbarSpacer />
+                                <Title text="Grand Total:" />
+                                <Title text="{/totalSum}" />
+                            </OverflowToolbar>
+                        </VBox>
+                    </uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+
+            <uxap:ObjectPageSection
+                titleUppercase="false"
+                title="Tax Invoice - Particulars"
+            >
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection
+                        id="idTaxSec"
+                        title="Tax Invoice - Particulars"
+                        titleUppercase="false"
+                    >
+                        <VBox>
+                            <Table
+                                id="idTaxInvcTable"
+                                items="{/taxProducts}"
+                                mode="Delete"
+                                delete=".onDelete"
+                            >
+                                <headerToolbar>
+                                    <OverflowToolbar>
+                                        <Title text="Line Items" />
+                                        <ToolbarSpacer />
+                                        <Button
+                                            icon="sap-icon://add"
+                                            text="Add Row"
+                                            press=".onAddRow"
+                                        />
+                                    </OverflowToolbar>
+                                </headerToolbar>
+
+                                <columns>
+                                    <Column width="12%">
+                                        <Text text="Sl.No" />
+                                    </Column>
+                                    <Column width="40%">
+                                        <Text text="Particulars" />
+                                    </Column>
+                                    <Column width="15%">
+                                        <Text text="HSN Code" />
+                                    </Column>
+                                    <Column
+                                        hAlign="Center"
+                                        width="15%"
+                                    >
+                                        <Text text="Qty" />
+                                    </Column>
+                                    <Column
+                                        hAlign="Center"
+                                        width="15%"
+                                    >
+                                        <Text text="Rate" />
+                                    </Column>
+                                    <Column
+                                        hAlign="Center"
+                                        width="15%"
+                                    >
+                                        <Text text="Total" />
+                                    </Column>
+                                </columns>
+
+                                <items>
+                                    <ColumnListItem>
+                                        <cells>
+                                            <Text
+                                                text="{= ${/products}.indexOf(${path: ''}) + 1 }"
+                                            />
+                                            <Input value="{productName}" />
+                                            <Input value="{HSNCode}" />
+                                            <Input
+                                                value="{quantity}"
+                                                change=".onCalc"
+                                            />
+                                            <Input
+                                                value="{price}"
+                                                change=".onCalc"
+                                            />
+                                            <Text text="{total}" />
+                                        </cells>
+                                    </ColumnListItem>
+                                </items>
+                            </Table>
+                            <OverflowToolbar>
+                                <ToolbarSpacer />
+                                <Title text="GST(18%):" />
+                                <Title text="{/gst}" />
+                            </OverflowToolbar>
+                            <OverflowToolbar>
+                                <ToolbarSpacer />
+                                <Title text="Grand Total:" />
+                                <Title text="{/totalSum}" />
+                            </OverflowToolbar>
+                        </VBox>
+                    </uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+        </uxap:sections>
+        <uxap:footer>
+            <OverflowToolbar>
+                <ToolbarSpacer />
+                <Button
+                    id="idBtnQuotation"
+                    icon="sap-icon://pdf-attachment"
+                    text="Generate Quotation"
+                    type="Transparent"
+                    press="onGeneratePDF"
+                />
+                <Button
+                    id="idBtnInvoice"
+                    icon="sap-icon://pdf-attachment"
+                    text="Tax Invoice"
+                    type="Transparent"
+                    press="onTaxInvoicePDF"
+                />
+                <CheckBox
+                    id="chkTotal"
+                    text="Total + GST"
+                    select="onTotalSelect"
+                />
+                <CheckBox
+                    id="chkGST"
+                    text="GST Amount"
+                    select="onGSTSelect"
+                />
+                <CheckBox
+                    id="chkBankDetail"
+                    text="Bank Details"
+                    select="onGSTSelect"
+                />
+            </OverflowToolbar>
+        </uxap:footer>
+    </uxap:ObjectPageLayout>
+
+    <!-- <Page
+        id="idPage"
         titleAlignment="Center"
     >
         <content>
+            <VBox
+                alignContent="Center"
+                alignItems="Center"
+            >
+                <RadioButtonGroup
+                    id="myRadioButtonGroup"
+                    select=".onRadioSelect"
+                >
+                    <buttons>
+                        <RadioButton
+                            id="idRBQuote"
+                            text="Quotation"
+                        />
+                        <RadioButton
+                            id="idTaxInv"
+                            text="TAX-INVOICE"
+                        />
+                    </buttons>
+                </RadioButtonGroup>
+            </VBox>
             <Panel
+                id="idPanelQuote1"
                 headerText="Quotation Details"
                 expandable="true"
-                expanded="true"
+                expanded="false"
                 width="auto"
                 class="sapUiSmallMargin"
             >
@@ -55,6 +467,7 @@
             </Panel>
 
             <Panel
+                id="idPanelQuote2"
                 headerText="Additional Information"
                 expandable="true"
                 expanded="false"
@@ -83,6 +496,57 @@
                         <TextArea
                             value="{/header/BankDetails}"
                             rows="7"
+                        />
+                    </f:content>
+                </f:SimpleForm>
+            </Panel>
+
+            <Panel
+                id="idTaxInvoice1"
+                headerText="Tax Invoice Details"
+                expandable="true"
+                expanded="false"
+                width="auto"
+                class="sapUiSmallMargin"
+            >
+                <f:SimpleForm
+                    editable="true"
+                    layout="ResponsiveGridLayout"
+                >
+                    <f:content>
+                        <Label text="To" />
+                        <TextArea
+                            value="{/taxHeader/To}"
+                            rows="3"
+                            placeholder="Name and Address"
+                        />
+
+                        <Label text="GST No" />
+                        <Input
+                            value="{/taxHeader/GSTNo}"
+                            placeholder="Enter GST No"
+                        />
+                        <Label text="Invoice No" />
+                        <Input
+                            value="{/taxHeader/InvoiceNo}"
+                            placeholder="Enter Invoice No"
+                        />
+                        <Label text="Date" />
+                        <DatePicker
+                            value="{/taxHeader/Date}"
+                            valueFormat="dd-MM-yyyy"
+                            displayFormat="long"
+                            placeholder="dd-MM-yyyy"
+                        />
+                        <Label text="PO No" />
+                        <Input
+                            value="{/taxHeader/PONo}"
+                            placeholder="Enter PO No"
+                        />
+                        <Label text="PO Date" />
+                        <Input
+                            value="{/taxHeader/PODate}"
+                            placeholder="Enter PO Date"
                         />
                     </f:content>
                 </f:SimpleForm>
@@ -168,10 +632,18 @@
             <OverflowToolbar>
                 <ToolbarSpacer />
                 <Button
+                    id="idBtnQuotation"
                     icon="sap-icon://pdf-attachment"
                     text="Generate Quotation"
                     type="Transparent"
                     press="onGeneratePDF"
+                />
+                <Button
+                    id="idBtnInvoice"
+                    icon="sap-icon://pdf-attachment"
+                    text="Tax Invoice"
+                    type="Transparent"
+                    press="onTaxInvoicePDF"
                 />
                 <CheckBox
                     id="chkTotal"
@@ -190,5 +662,5 @@
                 />
             </OverflowToolbar>
         </footer>
-    </Page>
+    </Page> -->
 </mvc:View>
