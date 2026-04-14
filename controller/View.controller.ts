@@ -25,8 +25,7 @@ export default class View extends Controller {
                 Subject: "",
                 Notes: "",
                 TermsAndConditions: "",
-                BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457",
-                PartyGST: ""
+                BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
             },
             products: [
                 { productName: "", quantity: 0, price: 0, total: "0.00" }
@@ -38,6 +37,7 @@ export default class View extends Controller {
                 Date: "",
                 PONo: "",
                 PODate: "",
+                PartyGST: "",
                 BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
             },
             taxProducts: [
