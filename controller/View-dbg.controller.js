@@ -23,6 +23,22 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           quantity: 0,
           price: 0,
           total: ""
+        }],
+        taxHeader: {
+          To: "",
+          GSTNo: "",
+          InvoiceNo: "",
+          Date: "",
+          PONo: "",
+          PODate: "",
+          BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
+        },
+        taxProducts: [{
+          taxpProductName: "",
+          taxHSNCode: "",
+          taxQuantity: 0,
+          taxPrice: 0,
+          taxTotal: ""
         }]
       };
       this.getView()?.setModel(new JSONModel(oData));
@@ -104,7 +120,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         // 1. Calculate individual row total
         const fQty = oProduct.quantity;
         const fPrice = parseFloat(oProduct.price) || 0;
-        debugger;
         let fRowTotal = 0;
         if (typeof fQty === "string") {
           fRowTotal = fPrice;
@@ -333,6 +348,75 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         chkGST.setVisible(false);
         chkTotal.setVisible(false);
       }
+    },
+    onTaxAddRow: function _onTaxAddRow() {
+      const oModel = this.getView()?.getModel();
+      const aProducts = oModel.getProperty("/taxProducts");
+      aProducts.push({
+        taxpProductName: "",
+        taxHSNCode: "",
+        taxQuantity: 0,
+        taxPrice: 0,
+        taxTotal: "0.00"
+      });
+      oModel.setProperty("/taxProducts", aProducts);
+    },
+    onTaxDelete: function _onTaxDelete(oEvent) {
+      // 1. Get the item (row) that was clicked
+      const oItemToDelete = oEvent.getParameter("listItem");
+
+      // 2. Get the binding context path (e.g., "/products/2")
+      const sPath = oItemToDelete.getBindingContext().getPath();
+
+      // 3. Extract the index from the path
+      const iIndex = parseInt(sPath.split("/").pop());
+
+      // 4. Get the model and the data array
+      const oModel = this.getView()?.getModel();
+      const aProducts = oModel.getProperty("/taxProducts");
+
+      // 5. Remove the element at the specific index
+      aProducts.splice(iIndex, 1);
+
+      // 6. Update the model to refresh the UI
+      oModel.setProperty("/taxProducts", aProducts);
+      this.onTaxCalc();
+    },
+    onTaxCalc: function _onTaxCalc() {
+      const oModel = this.getView()?.getModel();
+      const aProducts = oModel.getProperty("/taxProducts");
+      let fGrandTotal = 0;
+      let gst = 0;
+      let taxcgst = 0;
+      let taxsgst = 0;
+      aProducts.forEach(oProduct => {
+        // 1. Calculate individual row total
+        const fQty = oProduct.taxQuantity;
+        const fPrice = parseFloat(oProduct.taxPrice) || 0;
+        let fRowTotal = 0;
+        if (typeof fQty === "string") {
+          fRowTotal = fPrice;
+        } else if (typeof fQty === "number") {
+          fRowTotal = fQty * fPrice;
+        }
+
+        // Update the row total in the model
+        oProduct.taxTotal = fRowTotal.toFixed(2);
+
+        // 2. Add to Grand Total
+        taxcgst = taxcgst + fRowTotal * 0.09;
+        taxsgst = taxsgst + fRowTotal * 0.09;
+        fGrandTotal += fRowTotal;
+      });
+
+      // 3. Set the Grand Total property for the footer
+      oModel.setProperty("/taxtotal", fGrandTotal.toFixed(2).toString());
+      oModel.setProperty("/taxcgst", taxcgst.toFixed(2));
+      oModel.setProperty("/taxsgst", taxsgst.toFixed(2));
+      oModel.setProperty("/taxtotalSum", (fGrandTotal + taxcgst + taxsgst).toFixed(2).toString());
+
+      // Refresh model to ensure UI updates
+      oModel.refresh();
     }
   });
   return View;

@@ -45,7 +45,7 @@
                     >
                         <f:SimpleForm
                             editable="true"
-                            layout="ResponsiveGridLayout"
+                            layout="ColumnLayout"
                         >
                             <f:content>
                                 <Label text="Date" />
@@ -93,7 +93,7 @@
                     >
                         <f:SimpleForm
                             editable="true"
-                            layout="ResponsiveGridLayout"
+                            layout="ColumnLayout"
                         >
                             <f:content>
                                 <Label text="Notes" />
@@ -132,7 +132,7 @@
                     >
                         <f:SimpleForm
                             editable="true"
-                            layout="ResponsiveGridLayout"
+                            layout="ColumnLayout"
                         >
                             <f:content>
                                 <Label text="To" />
@@ -169,6 +169,11 @@
                                     value="{/taxHeader/PODate}"
                                     placeholder="Enter PO Date"
                                 />
+                                <Label text="Bank Details" />
+                                <TextArea
+                                    value="{/taxHeader/BankDetails}"
+                                    rows="7"
+                                />
                             </f:content>
                         </f:SimpleForm>
                     </uxap:ObjectPageSubSection>
@@ -179,11 +184,13 @@
                 id="idQuotationSec"
                 titleUppercase="false"
                 title="Quotation - Particulars"
+                showTitle="false"
             >
                 <uxap:subSections>
                     <uxap:ObjectPageSubSection
                         title="Quotation - Particulars"
                         titleUppercase="false"
+                        showTitle="false"
                     >
                         <VBox>
                             <Table
@@ -205,27 +212,27 @@
                                 </headerToolbar>
 
                                 <columns>
-                                    <Column width="12%">
-                                        <Text text="Sl.No" />
+                                    <Column width="15%">
+                                        <Text text="No" />
                                     </Column>
                                     <Column width="40%">
                                         <Text text="Particulars" />
                                     </Column>
                                     <Column
                                         hAlign="Center"
-                                        width="15%"
+                                        width="20%"
                                     >
                                         <Text text="Qty" />
                                     </Column>
                                     <Column
                                         hAlign="Center"
-                                        width="15%"
+                                        width="20%"
                                     >
                                         <Text text="Rate" />
                                     </Column>
                                     <Column
                                         hAlign="Center"
-                                        width="15%"
+                                        width="25%"
                                     >
                                         <Text text="Total" />
                                     </Column>
@@ -237,7 +244,7 @@
                                             <Text
                                                 text="{= ${/products}.indexOf(${path: ''}) + 1 }"
                                             />
-                                            <Input value="{productName}" />
+                                            <TextArea value="{productName}" />
                                             <Input
                                                 value="{quantity}"
                                                 change=".onCalc"
@@ -275,13 +282,14 @@
                         id="idTaxSec"
                         title="Tax Invoice - Particulars"
                         titleUppercase="false"
+                        showTitle="false"
                     >
                         <VBox>
                             <Table
                                 id="idTaxInvcTable"
                                 items="{/taxProducts}"
                                 mode="Delete"
-                                delete=".onDelete"
+                                delete=".onTaxDelete"
                             >
                                 <headerToolbar>
                                     <OverflowToolbar>
@@ -290,37 +298,28 @@
                                         <Button
                                             icon="sap-icon://add"
                                             text="Add Row"
-                                            press=".onAddRow"
+                                            press=".onTaxAddRow"
                                         />
                                     </OverflowToolbar>
                                 </headerToolbar>
 
                                 <columns>
-                                    <Column width="12%">
-                                        <Text text="Sl.No" />
+                                    <Column width="5%">
+                                        <Text text="No" />
                                     </Column>
-                                    <Column width="40%">
+                                    <Column>
                                         <Text text="Particulars" />
                                     </Column>
-                                    <Column width="15%">
+                                    <Column>
                                         <Text text="HSN Code" />
                                     </Column>
-                                    <Column
-                                        hAlign="Center"
-                                        width="15%"
-                                    >
+                                    <Column hAlign="Center">
                                         <Text text="Qty" />
                                     </Column>
-                                    <Column
-                                        hAlign="Center"
-                                        width="15%"
-                                    >
+                                    <Column hAlign="Center">
                                         <Text text="Rate" />
                                     </Column>
-                                    <Column
-                                        hAlign="Center"
-                                        width="15%"
-                                    >
+                                    <Column hAlign="Center">
                                         <Text text="Total" />
                                     </Column>
                                 </columns>
@@ -329,32 +328,44 @@
                                     <ColumnListItem>
                                         <cells>
                                             <Text
-                                                text="{= ${/products}.indexOf(${path: ''}) + 1 }"
+                                                text="{= ${/taxProducts}.indexOf(${path: ''}) + 1 }"
                                             />
-                                            <Input value="{productName}" />
-                                            <Input value="{HSNCode}" />
+                                            <TextArea
+                                                value="{taxpProductName}"
+                                            />
+                                            <Input value="{taxHSNCode}" />
                                             <Input
-                                                value="{quantity}"
-                                                change=".onCalc"
+                                                value="{taxQuantity}"
+                                                change=".onTaxCalc"
                                             />
                                             <Input
-                                                value="{price}"
-                                                change=".onCalc"
+                                                value="{taxPrice}"
+                                                change=".onTaxCalc"
                                             />
-                                            <Text text="{total}" />
+                                            <Text text="{taxTotal}" />
                                         </cells>
                                     </ColumnListItem>
                                 </items>
                             </Table>
+                             <OverflowToolbar>
+                                <ToolbarSpacer />
+                                <Title text="Total" />
+                                <Title text="{/taxtotal}" />
+                            </OverflowToolbar>
                             <OverflowToolbar>
                                 <ToolbarSpacer />
-                                <Title text="GST(18%):" />
-                                <Title text="{/gst}" />
+                                <Title text="CGST @ 9" />
+                                <Title text="{/taxcgst}" />
+                            </OverflowToolbar>
+                            <OverflowToolbar>
+                                <ToolbarSpacer />
+                                <Title text="SGST @ 9" />
+                                <Title text="{/taxsgst}" />
                             </OverflowToolbar>
                             <OverflowToolbar>
                                 <ToolbarSpacer />
                                 <Title text="Grand Total:" />
-                                <Title text="{/totalSum}" />
+                                <Title text="{/taxtotalSum}" />
                             </OverflowToolbar>
                         </VBox>
                     </uxap:ObjectPageSubSection>
@@ -432,7 +443,7 @@
             >
                 <f:SimpleForm
                     editable="true"
-                    layout="ResponsiveGridLayout"
+                    layout="ColumnLayout"
                 >
                     <f:content>
                         <Label text="Date" />
@@ -476,7 +487,7 @@
             >
                 <f:SimpleForm
                     editable="true"
-                    layout="ResponsiveGridLayout"
+                    layout="ColumnLayout"
                 >
                     <f:content>
                         <Label text="Notes" />
@@ -511,7 +522,7 @@
             >
                 <f:SimpleForm
                     editable="true"
-                    layout="ResponsiveGridLayout"
+                    layout="ColumnLayout"
                 >
                     <f:content>
                         <Label text="To" />
