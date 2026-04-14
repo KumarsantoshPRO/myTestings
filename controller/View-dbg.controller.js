@@ -563,7 +563,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
 
       // Billing Address (Left)
       const splitTo = doc.splitTextToSize(oData.taxHeader.To, 90);
-      doc.text(splitTo, 10, 47);
+      doc.text(splitTo, 15, 47);
 
       // Invoice Metadata (Right)
       const metaX = 130;
