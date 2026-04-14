@@ -25,10 +25,11 @@ export default class View extends Controller {
                 Subject: "",
                 Notes: "",
                 TermsAndConditions: "",
-                BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
+                BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457",
+                PartyGST: ""
             },
             products: [
-                { productName: "", quantity: 0, price: 0, total: "" }
+                { productName: "", quantity: 0, price: 0, total: "0.00" }
             ],
             taxHeader: {
                 To: "",
@@ -40,7 +41,7 @@ export default class View extends Controller {
                 BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
             },
             taxProducts: [
-                { taxpProductName: "", taxHSNCode: "", taxQuantity: 0, taxPrice: 0, taxTotal: "" }
+                { taxpProductName: "", taxHSNCode: "", taxQuantity: 0, taxPrice: 0, taxTotal: "0.00" }
             ]
         };
         this.getView()?.setModel(new JSONModel(oData));
@@ -194,6 +195,14 @@ export default class View extends Controller {
             const aItems = oModel.getProperty("/products");
             const doc = new jspdfLib.jsPDF();
             const pageWidth = doc.internal.pageSize.width;
+            const pageHeight = doc.internal.pageSize.height;
+            const margin = 5;
+
+            // --- 0. SET PAGE BORDER ---
+            // rect(x, y, width, height)
+            doc.setDrawColor(0, 0, 0); // Black border
+            doc.setLineWidth(0.3);
+            doc.rect(margin, margin, pageWidth - (margin * 2), pageHeight - (margin * 2));
 
             // HEADER SECTION
             if (this.sLogoBase64) {
@@ -210,9 +219,9 @@ export default class View extends Controller {
             doc.text("E-mail: intelecompatil@rediffmail.com", pageWidth - 14, 25, { align: 'right' });
             doc.setFontSize(9);
             doc.text("#249, 7th Main, 4th Cross, 2nd Stage,", pageWidth - 14, 30, { align: 'right' });
-            doc.text("Nagarabhavi, Bangalore-560062", pageWidth - 14, 35, { align: 'right' });
+            doc.text("Nagarabhavi, Bangalore-560072", pageWidth - 14, 35, { align: 'right' });
 
-            doc.line(14, 40, pageWidth - 14, 40);
+            doc.line(5, 40, pageWidth - 5, 40);
 
             // TO / SUB / DATE SECTION 
             doc.setFont("helvetica", "bold");
@@ -227,71 +236,161 @@ export default class View extends Controller {
             doc.text("Sub: " + oHeader.Subject, 14, 75);
 
             //TABLE SECTION
+            const bShowGST = (this.getView()?.byId("chkGST") as CheckBox).getSelected();
+            const bShowTotal = (this.getView()?.byId("chkTotal") as CheckBox).getSelected();
+            // 1. Prepare standard product rows
             const tableBody = aItems.map((item: any, index: number) => [
                 index + 1,
                 item.productName,
                 item.quantity,
-                Number(item.price).toFixed(2).toString(),
-                item.total
+                Number(item.price).toFixed(2),
+                Number(item.total).toFixed(2)
             ]);
 
+            // 2. Calculate Totals
             const subtotal = aItems.reduce((acc: number, cur: any) => acc + parseFloat(cur.total || 0), 0);
-            const gstAmount = Number(subtotal) * 0.18;
-            const grandTotal = Number(subtotal) + Number(gstAmount);
+            const gstAmount = subtotal * 0.18;
+            const grandTotal = subtotal + gstAmount;
+
+            // 3. Add Total rows to the table array
+            // We use colSpan: 4 to merge the first 4 columns into one single label cell
+            if (bShowGST && bShowTotal) {
+                tableBody.push(
+                    [
+                        {
+                            content: '18% GST Amount',
+                            colSpan: 4,
+                            styles: { halign: 'right', fontStyle: 'bold' }
+                        },
+                        {
+                            content: gstAmount.toFixed(2),
+                            styles: { halign: 'right', fontStyle: 'bold' }
+                        }
+                    ],
+                    [
+                        {
+                            content: 'Total',
+                            colSpan: 4,
+                            styles: { halign: 'right', fontStyle: 'bold' }
+                        },
+                        {
+                            content: grandTotal.toFixed(2),
+                            styles: { halign: 'right', fontStyle: 'bold' }
+                        }
+                    ]
+                );
+            } else if (bShowGST) {
+                tableBody.push(
+                    [
+                        {
+                            content: '18% GST Amount',
+                            colSpan: 4,
+                            styles: { halign: 'right', fontStyle: 'bold' }
+                        },
+                        {
+                            content: gstAmount.toFixed(2),
+                            styles: { halign: 'right', fontStyle: 'bold' }
+                        }
+                    ]
+                );
+            } else if (bShowTotal) {
+                tableBody.push(
+                    [
+                        {
+                            content: 'Total',
+                            colSpan: 4,
+                            styles: { halign: 'right', fontStyle: 'bold' }
+                        },
+                        {
+                            content: grandTotal.toFixed(2),
+                            styles: { halign: 'right', fontStyle: 'bold' }
+                        }
+                    ]
+                );
+            }
+
+            // 4. Generate the Table
             (doc as any).autoTable({
                 startY: 82,
-                head: [['SI.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']],
+                head: [['Sl.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']],
                 body: tableBody,
                 theme: 'grid',
-                headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], lineWidth: 0.1 },
-                columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 90 }, 4: { halign: 'right' } }
+                styles: {
+                    fontSize: 9,
+                    lineColor: [0, 0, 0],
+                    lineWidth: 0.1
+                },
+                headStyles: {
+                    fillColor: [255, 255, 255],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold'
+                },
+                columnStyles: {
+                    0: { cellWidth: 15 },
+                    1: { cellWidth: 'auto' },
+                    2: { cellWidth: 20, halign: 'center' },
+                    3: { cellWidth: 25, halign: 'right' },
+                    4: { cellWidth: 30, halign: 'right' }
+                }
             });
 
             let finalY = (doc as any).lastAutoTable.finalY;
 
             // Subtotal and GST Note
             // Get the checkbox states
-            const bShowGST = (this.getView()?.byId("chkGST") as CheckBox).getSelected();
-            const bShowTotal = (this.getView()?.byId("chkTotal") as CheckBox).getSelected();
+            // const bShowGST = (this.getView()?.byId("chkGST") as CheckBox).getSelected();
+            // const bShowTotal = (this.getView()?.byId("chkTotal") as CheckBox).getSelected();
 
-            doc.setFont("helvetica", "bold");
-            // Conditional Logic for GST Amount
-            if (bShowGST) {
-                doc.text("18% GST Amount", 14, finalY + 10); //[span_16](end_span)
-                doc.text(gstAmount.toFixed(2), pageWidth - 14, finalY + 10, { align: 'right' });
-            }
-            // Conditional Logic for Grand Total
-            if (bShowTotal) {
-                doc.text("Total", 14, finalY + 14); //[span_16](end_span)
-                doc.text(grandTotal.toFixed(2), pageWidth - 14, finalY + 14, { align: 'right' });
-            }
+            // doc.setFont("helvetica", "bold");
+            // // Conditional Logic for GST Amount
+
+            // if (bShowGST) {
+            //     finalY = finalY + 4;
+            //     doc.text("18% GST Amount", 14, finalY); //[span_16](end_span)
+            //     doc.text(gstAmount.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
+            // }
+            // // Conditional Logic for Grand Total
+            // if (bShowTotal) {
+            //     finalY = finalY + 4;
+            //     doc.text("Total", 14, finalY); //[span_16](end_span)
+            //     doc.text(grandTotal.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
+            // }
 
             // Terms & Conditions ---
+            finalY = finalY + 10;
             doc.setFontSize(9);
             doc.setFont("helvetica", "bold");
-            doc.text("Terms & Conditions:", 14, finalY + 30);
+            doc.text("Terms & Conditions:", 14, finalY);
             doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 36);
+            doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 4);
+
+
+
+
+            // Notes
+            if (oHeader.Notes !== "") {
+                finalY = finalY + 30;
+                doc.setFont("helvetica", "bold");
+                doc.text("Notes:", 14, finalY);
+                doc.setFont("helvetica", "normal");
+                doc.text(doc.splitTextToSize(oHeader.Notes, pageWidth - 28), 14, finalY + 4);
+
+            }
+
 
             // Bank Details ---
             const bBankDetails = (this.getView()?.byId("chkBankDetail") as CheckBox).getSelected();
             if (bBankDetails) {
+                finalY = finalY + 30;
                 doc.setFontSize(9);
                 doc.setFont("helvetica", "bold");
-                doc.text("Bank Details:", pageWidth - 80, finalY + 30);
+                doc.text("Bank Details:", 14, finalY);
                 doc.setFont("helvetica", "normal");
-                doc.text(doc.splitTextToSize(oHeader.BankDetails, pageWidth - 80), pageWidth - 80, finalY + 36);
+                doc.text(doc.splitTextToSize(oHeader.BankDetails, pageWidth - 28), 14, finalY + 4);
             }
 
-
-            // Notes
-            doc.setFont("helvetica", "bold");
-            doc.text("Notes:", 14, finalY + 70);
-            doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oHeader.Notes, pageWidth - 28), 14, finalY + 75);
-
             // SIGNATURE SECTION
-            const sigY = doc.internal.pageSize.height - 45;
+            const sigY = doc.internal.pageSize.height - 40;
 
             if (this.sSignaturBase64) {
                 doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, sigY, 70, 25);
@@ -350,6 +449,8 @@ export default class View extends Controller {
 
         }
     }
+
+
     public onTaxAddRow(): void {
         const oModel = this.getView()?.getModel() as JSONModel;
         const aProducts = oModel.getProperty("/taxProducts");
@@ -387,7 +488,7 @@ export default class View extends Controller {
 
         aProducts.forEach((oProduct: any) => {
             // 1. Calculate individual row total
-            const fQty = oProduct.taxQuantity;
+            const fQty = parseFloat(oProduct.taxQuantity) || 0;
             const fPrice = parseFloat(oProduct.taxPrice) || 0;
 
             let fRowTotal = 0;
@@ -417,6 +518,199 @@ export default class View extends Controller {
 
         // Refresh model to ensure UI updates
         oModel.refresh();
+    }
+    public onTaxInvoicePDF(): void {
+
+        const jspdfLib = (window as any).jspdf;
+        if (!jspdfLib) return;
+        const oModel = this.getView()?.getModel() as JSONModel;
+        const oData = oModel.getData();
+        const doc = new jspdfLib.jsPDF();
+        const startX = 5;
+        const endX = 205;
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5;
+
+        // --- 0. SET PAGE BORDER ---
+        // rect(x, y, width, height)
+        doc.setDrawColor(0, 0, 0); // Black border
+        doc.setLineWidth(0.3);
+        doc.rect(margin, margin, pageWidth - (margin * 2), pageHeight - (margin * 2));
+
+
+        // --- 1. Header Section ---
+        doc.setFontSize(10);
+        doc.text("TAX-INVOICE", 105, 10, { align: "center" });
+        doc.text("Ph: 080-23481249", 170, 10);
+        doc.line(startX, 12, endX, 12);
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(255, 0, 0);
+        doc.text("IN-TELECOM SERVICES", 105, 20, { align: "center" });
+
+        // doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 255);
+        doc.text("#249, 7th Main, 4th Cross, 2nd Stage,Nagarabhavi, Bangalore-560072", 105, 25, { align: "center" });
+
+        doc.line(startX, 32, endX, 32); // Horizontal Line Division
+
+        // --- 2. Client & Invoice Info ---
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "bold");
+        doc.text("To,", 15, 42);
+        doc.setFont("helvetica", "normal");
+
+        // Billing Address (Left)
+        const splitTo = doc.splitTextToSize(oData.taxHeader.To, 90);
+        doc.text(splitTo, 10, 47);
+
+        // Invoice Metadata (Right)
+        const metaX = 130;
+        doc.text(`GST No: ${oData.taxHeader.GSTNo}`, metaX, 42);
+        doc.text(`Invoice No: ${oData.taxHeader.InvoiceNo}`, metaX, 48);
+        doc.text(`Date: ${oData.taxHeader.Date}`, metaX, 54);
+        doc.text(`PO No: ${oData.taxHeader.PONo}`, metaX, 60);
+        doc.text(`PO Date: ${oData.taxHeader.PODate}`, metaX, 66);
+
+        // --- 3. Line Items Table ---
+        const tableRows = oData.taxProducts.map((item: any, index: number) => [
+            index + 1,
+            item.taxpProductName,
+            item.taxHSNCode,
+            Number(item.taxPrice).toFixed(2).toString(),
+            item.taxQuantity,
+            item.taxTotal
+        ]);
+
+        //Totals and Calculations ---
+        const totalAmount = oData.taxProducts.reduce((sum: number, item: any) => sum + parseFloat(item.taxTotal), 0);
+        const taxVal = totalAmount * 0.09; // CGST/SGST 9%[span_13](end_span)
+        const grandTotal = totalAmount + (taxVal * 2);
+        tableRows.push(
+            [{ content: `TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } }, { content: totalAmount.toFixed(2), styles: { halign: 'right', fontStyle: 'bold' } }],
+            [{ content: `CGST @ 9%:`, colSpan: 5, styles: { halign: 'right' } }, { content: taxVal.toFixed(2), styles: { halign: 'right' } }],
+            [{ content: `SGST @ 9%:`, colSpan: 5, styles: { halign: 'right' } }, { content: taxVal.toFixed(2), styles: { halign: 'right' } }],
+            [{ content: `GRAND TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }, { content: grandTotal.toFixed(2), styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }]
+        );
+
+        (doc as any).autoTable({
+            startY: 75,
+            head: [["SI No.", "Particulars", "HSN Code", "Rate", "No.of Units", "Amount"]],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                fontSize: 8,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0]
+            },
+            headStyles: {
+                fillColor: [255, 255, 255],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { halign: 'center' },
+                3: { halign: 'right' },
+                4: { halign: 'center' },
+                5: { halign: 'right' }
+            },
+            // This function removes the vertical lines for the total rows
+            didParseCell: function (data: any) {
+                // Check if the current row is one of the total rows (the last 4 rows)
+                const totalRowsCount = 4;
+                const isTotalRow = data.row.index >= (tableRows.length - totalRowsCount);
+
+                if (isTotalRow) {
+                    // Remove vertical lines by setting lineWidth to 0 for sides
+                    // We only keep the top/bottom lines for the row structure
+                    data.cell.styles.lineWidth = { top: 0.1, right: 0, bottom: 0.1, left: 0 };
+
+                    // For the very last cell (the amount), we can add the right border back to close the table
+                    if (data.column.index === 5) {
+                        data.cell.styles.lineWidth = { top: 0.1, right: 0.1, bottom: 0.1, left: 0 };
+                    }
+                    // For the first cell, add the left border back
+                    if (data.column.index === 0) {
+                        data.cell.styles.lineWidth = { top: 0.1, right: 0, bottom: 0.1, left: 0.1 };
+                    }
+                }
+            }
+        });
+
+        const finalY = (doc as any).lastAutoTable.finalY + 5;
+        const alignX = 190; // Fixed X-coordinate to align with the 'Amount' column end
+
+
+
+
+        // doc.setFont("helvetica", "bold");
+
+        // // Use { align: "right" } and a consistent X-coordinate to align them vertically
+        // doc.text(`TOTAL: ${totalAmount.toFixed(2)}`, alignX, finalY, { align: "right" });
+        // doc.line(startX, finalY + 2, endX, finalY + 2);
+        // doc.text(`CGST @ 9%: ${taxVal.toFixed(2)}`, alignX, finalY + 6, { align: "right" });
+        // doc.line(startX, finalY + 8, endX, finalY + 8);
+        // doc.text(`SGST @ 9%: ${taxVal.toFixed(2)}`, alignX, finalY + 12, { align: "right" });
+        // doc.line(startX, finalY + 14, endX, finalY + 14);
+        // // Grand Total
+        // doc.setFontSize(10);
+        // doc.text(`GRAND TOTAL: ${grandTotal.toFixed(2)}`, alignX, finalY + 20, { align: "right" });
+
+
+        // --- 5. Footer: Rupees, GST, and Bank ---
+        doc.line(startX, finalY + 5, endX, finalY + 5); // Division Line
+
+        doc.setFont("helvetica", "normal");
+        const amountInWords = this.numberToWords(grandTotal);
+        doc.text(`Rupees in words: ${amountInWords} Only`, 10, finalY + 10);
+        doc.text(`Party GST No: ${oData.taxHeader.PartyGST || ""}`, 10, finalY + 18);
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Bank Details", 10, finalY + 28);
+        doc.setFont("helvetica", "normal");
+        const splitBank = doc.splitTextToSize(oData.taxHeader.BankDetails, 100);
+        doc.text(splitBank, 10, finalY + 33);
+
+        // Signatory
+        // doc.setFont("helvetica", "bold");
+        // doc.text("For In-Telecom Services", 150, finalY + 63);
+        // doc.text("Authorized Signatory", 150, finalY + 85);
+        // SIGNATURE SECTION
+        const sigY = doc.internal.pageSize.height - 40;
+
+        if (this.sSignaturBase64) {
+            doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, sigY, 70, 25);
+        }
+        window.open(doc.output("bloburl"), "_blank");
+    }
+
+    // Helper to convert number to Words
+    private numberToWords(num: number): string {
+        const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+        const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+        const regex = new RegExp('[0-9]{1,9}');
+        const number = num.toString();
+        if (!regex.test(number)) return '';
+        if (num === 0) return 'Zero';
+
+        // Split into segments for Crore, Lakh, Thousand, and Hundreds
+        const n = ('000000000' + number).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+        if (!n) return '';
+
+        let str = '';
+        // Use Number() to convert string indices to numbers for array access
+        str += (Number(n[1]) !== 0) ? (a[Number(n[1])] || b[Number(n[1][0])] + ' ' + a[Number(n[1][1])]) + 'Crore ' : '';
+        str += (Number(n[2]) !== 0) ? (a[Number(n[2])] || b[Number(n[2][0])] + ' ' + a[Number(n[2][1])]) + 'Lakh ' : '';
+        str += (Number(n[3]) !== 0) ? (a[Number(n[3])] || b[Number(n[3][0])] + ' ' + a[Number(n[3][1])]) + 'Thousand ' : '';
+        str += (Number(n[4]) !== 0) ? (a[Number(n[4])] || b[Number(n[4][0])] + ' ' + a[Number(n[4][1])]) + 'Hundred ' : '';
+        str += (Number(n[5]) !== 0) ? ((str !== '') ? 'and ' : '') + (a[Number(n[5])] || b[Number(n[5][0])] + ' ' + a[Number(n[5][1])]) : '';
+
+        return str.trim();
     }
 
 }
