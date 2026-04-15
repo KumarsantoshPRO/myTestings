@@ -48,24 +48,18 @@
                             layout="ColumnLayout"
                         >
                             <f:content>
+                                <Label text="To (Name and Address)" />
+                                <TextArea
+                                    value="{/header/To}"
+                                    placeholder="e.g., Mr. Patil"
+                                    rows="2"
+                                />
                                 <Label text="Date" />
                                 <DatePicker
                                     value="{/header/Date}"
                                     valueFormat="dd-MM-yyyy"
                                     displayFormat="long"
                                     placeholder="dd-MM-yyyy"
-                                />
-
-                                <Label text="To (Customer Name)" />
-                                <TextArea
-                                    value="{/header/To}"
-                                    placeholder="e.g., Mr. Patil"
-                                />
-
-                                <Label text="Location" />
-                                <Input
-                                    value="{/header/Location}"
-                                    placeholder="e.g., Bangalore"
                                 />
 
                                 <Label text="Subject" />
@@ -174,7 +168,7 @@
                                     value="{/taxHeader/BankDetails}"
                                     rows="7"
                                 />
-                                 <Label text="Party GST No" />
+                                <Label text="Party GST No" />
                                 <Input
                                     value="{/taxHeader/PartyGST}"
                                     placeholder="Enter Party GST"
@@ -203,6 +197,7 @@
                                 items="{/products}"
                                 mode="Delete"
                                 delete=".onDelete"
+                                sticky="ColumnHeaders,HeaderToolbar,InfoToolbar"
                             >
                                 <headerToolbar>
                                     <OverflowToolbar>
@@ -217,28 +212,19 @@
                                 </headerToolbar>
 
                                 <columns>
-                                    <Column width="15%">
+                                    <Column visible="false">
                                         <Text text="No" />
                                     </Column>
-                                    <Column width="40%">
+                                    <Column>
                                         <Text text="Particulars" />
                                     </Column>
-                                    <Column
-                                        hAlign="Center"
-                                        width="20%"
-                                    >
+                                    <Column hAlign="Center">
                                         <Text text="Qty" />
                                     </Column>
-                                    <Column
-                                        hAlign="Center"
-                                        width="20%"
-                                    >
+                                    <Column hAlign="Center">
                                         <Text text="Rate" />
                                     </Column>
-                                    <Column
-                                        hAlign="Center"
-                                        width="25%"
-                                    >
+                                    <Column hAlign="Center">
                                         <Text text="Total" />
                                     </Column>
                                 </columns>
@@ -295,6 +281,7 @@
                                 items="{/taxProducts}"
                                 mode="Delete"
                                 delete=".onTaxDelete"
+                                sticky="ColumnHeaders,HeaderToolbar,InfoToolbar"
                             >
                                 <headerToolbar>
                                     <OverflowToolbar>
@@ -309,7 +296,7 @@
                                 </headerToolbar>
 
                                 <columns>
-                                    <Column width="5%">
+                                    <Column visible="false">
                                         <Text text="No" />
                                     </Column>
                                     <Column>
@@ -352,7 +339,7 @@
                                     </ColumnListItem>
                                 </items>
                             </Table>
-                             <OverflowToolbar>
+                            <OverflowToolbar>
                                 <ToolbarSpacer />
                                 <Title text="Total" />
                                 <Title text="{/taxtotal}" />

@@ -12,7 +12,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         header: {
           To: "",
           Date: "",
-          Location: "",
           Subject: "",
           Notes: "",
           TermsAndConditions: "",
@@ -224,14 +223,14 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
 
         // TO / SUB / DATE SECTION 
         doc.setFont("helvetica", "bold");
-        doc.text(`Date: ${oHeader.Date}`, pageWidth - 14, 55, {
+        doc.text(`Date: ${oHeader.Date}`, pageWidth - 14, 45, {
           align: 'right'
         });
-        doc.text("To,", 14, 55);
+        doc.text("To,", 14, 45);
         doc.setFont("helvetica", "normal");
-        doc.text(doc.splitTextToSize(oHeader.To + "\n" + oHeader.Location, 80), 14, 60);
+        doc.text(doc.splitTextToSize(oHeader.To, 80), 14, 50);
         doc.setFont("helvetica", "bold");
-        doc.text("Sub: " + oHeader.Subject, 14, 75);
+        doc.text("Sub: " + oHeader.Subject, 14, 70);
 
         //TABLE SECTION
         const bShowGST = (this.getView()?.byId("chkGST")).getSelected();
@@ -308,7 +307,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
 
         // 4. Generate the Table
         doc.autoTable({
-          startY: 82,
+          startY: 72,
           head: [['Sl.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']],
           body: tableBody,
           theme: 'grid',
