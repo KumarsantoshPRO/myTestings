@@ -1,6 +1,14 @@
 sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap/m/MessageBox"], function (Controller, JSONModel, MessageBox) {
   "use strict";
 
+  const formatINR = amount => {
+    const value = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(value)) return '0.00';
+    return new Intl.NumberFormat('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  };
   const View = Controller.extend("webapp.controller.View", {
     constructor: function constructor() {
       Controller.prototype.constructor.apply(this, arguments);
@@ -21,6 +29,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           productName: "",
           quantity: 0,
           price: 0,
+          symbol: "",
           total: "0.00"
         }],
         taxHeader: {
@@ -38,7 +47,18 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           taxHSNCode: "",
           taxQuantity: 0,
           taxPrice: 0,
+          taxSymbol: "",
           taxTotal: "0.00"
+        }],
+        cashHeader: {
+          cashTo: "",
+          cashDate: "",
+          cashbankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
+        },
+        cashProducts: [{
+          cashBody: "",
+          cashQuantity: "",
+          cashAmount: ""
         }]
       };
       this.getView()?.setModel(new JSONModel(oData));
@@ -47,8 +67,11 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       // (this.getView()?.byId("idPage") as Page).setTitle("Quotation");
       (this.getView()?.byId("idBtnQuotation")).setVisible(true);
       (this.getView()?.byId("idBtnInvoice")).setVisible(false);
+      (this.getView()?.byId("idBtnCash")).setVisible(false);
       (this.getView()?.byId("idOPSQuoteTaxInc")).setVisible(false);
       (this.getView()?.byId("idTaxSec")).setVisible(false);
+      (this.getView()?.byId("idOPSCash")).setVisible(false);
+      (this.getView()?.byId("idCashSecTab")).setVisible(false);
     },
     _loadLocalLogo: function _loadLocalLogo(sRelativePath) {
       const sFullUrl = sap.ui.require.toUrl("my/app/generatebill/" + sRelativePath);
@@ -78,12 +101,83 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       xhr.responseType = "blob";
       xhr.send();
     },
+    onSelectChange: function _onSelectChange(oEvent) {
+      // Get the index of the selected button (0 for first, 1 for second)
+      const iSelectedText = oEvent.getParameter("selectedItem").getText();
+
+      // Alternatively, get the specific RadioButton control
+      // const oSelectedButton = oEvent.getSource().getSelectedButton();
+      // const sText = oSelectedButton.getText();
+
+      const OPSQuote1 = this.getView()?.byId("idOPSQuote1");
+      const OPSQuote2 = this.getView()?.byId("idOPSQuote2");
+      const OPSQuote3 = this.getView()?.byId("idOPSQuoteTaxInc");
+      const OPSTaxInvc = this.getView()?.byId("idTaxSec");
+      const QuotationSec = this.getView()?.byId("idQuotationSec");
+      const CashSec = this.getView()?.byId("idOPSCash");
+      const CashSecTab = this.getView()?.byId("idCashSecTab");
+      const idQuotation = this.getView()?.byId("idBtnQuotation");
+      const idInvoice = this.getView()?.byId("idBtnInvoice");
+      const idCashBill = this.getView()?.byId("idBtnCash");
+      const chkBankDetail = this.getView()?.byId("chkBankDetail");
+      const chkGST = this.getView()?.byId("chkGST");
+      const chkTotal = this.getView()?.byId("chkTotal");
+      // Logic based on selection
+      if (iSelectedText === "Quotation") {
+        // Quotation
+        OPSQuote1.setVisible(true);
+        OPSQuote2.setVisible(true);
+        QuotationSec.setVisible(true);
+        OPSQuote3.setVisible(false);
+        OPSTaxInvc.setVisible(false);
+        idQuotation.setVisible(true);
+        idInvoice.setVisible(false);
+        chkBankDetail.setVisible(true);
+        chkGST.setVisible(true);
+        chkTotal.setVisible(true);
+        CashSec.setVisible(false);
+        CashSecTab.setVisible(false);
+        idCashBill.setVisible(false);
+      } else if (iSelectedText === "Cash Bill") {
+        // Cash Bill
+        OPSQuote1.setVisible(false);
+        OPSQuote2.setVisible(false);
+        QuotationSec.setVisible(false);
+        OPSQuote3.setVisible(false);
+        OPSTaxInvc.setVisible(false);
+        idQuotation.setVisible(false);
+        idInvoice.setVisible(false);
+        chkBankDetail.setVisible(false);
+        chkGST.setVisible(false);
+        chkTotal.setVisible(false);
+        CashSec.setVisible(true);
+        CashSecTab.setVisible(true);
+        idCashBill.setVisible(true);
+      } else {
+        // TAX-INVOICE
+        OPSQuote1.setVisible(false);
+        OPSQuote2.setVisible(false);
+        QuotationSec.setVisible(false);
+        OPSQuote3.setVisible(true);
+        OPSTaxInvc.setVisible(true);
+        idQuotation.setVisible(false);
+        idInvoice.setVisible(true);
+        chkBankDetail.setVisible(false);
+        chkGST.setVisible(false);
+        chkTotal.setVisible(false);
+        CashSec.setVisible(false);
+        CashSecTab.setVisible(false);
+        idCashBill.setVisible(false);
+      }
+    },
+    //Quotation Section
     onAddRow: function _onAddRow() {
       const oModel = this.getView()?.getModel();
       const aProducts = oModel.getProperty("/products");
       aProducts.push({
         productName: "",
         price: 0,
+        symbol: "",
         quantity: 1,
         total: "0.00"
       });
@@ -177,7 +271,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       return true; // All checks passed
     },
     onGeneratePDF: function _onGeneratePDF() {
-      if (this.validateForm()) {
+      if (true) {
         const jspdfLib = window.jspdf;
         if (!jspdfLib) return;
         const oModel = this.getView()?.getModel();
@@ -236,7 +330,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         const bShowGST = (this.getView()?.byId("chkGST")).getSelected();
         const bShowTotal = (this.getView()?.byId("chkTotal")).getSelected();
         // 1. Prepare standard product rows
-        const tableBody = aItems.map((item, index) => [index + 1, item.productName, item.quantity, Number(item.price).toFixed(2), Number(item.total).toFixed(2)]);
+        const tableBody = aItems.map((item, index) => [index + 1, item.productName, item.quantity, formatINR(item.price) + item.symbol, formatINR(item.total)]);
 
         // 2. Calculate Totals
         const subtotal = aItems.reduce((acc, cur) => acc + parseFloat(cur.total || 0), 0);
@@ -254,7 +348,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               fontStyle: 'bold'
             }
           }, {
-            content: gstAmount.toFixed(2),
+            content: formatINR(gstAmount),
             styles: {
               halign: 'right',
               fontStyle: 'bold'
@@ -267,7 +361,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               fontStyle: 'bold'
             }
           }, {
-            content: grandTotal.toFixed(2),
+            content: formatINR(grandTotal),
             styles: {
               halign: 'right',
               fontStyle: 'bold'
@@ -282,7 +376,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               fontStyle: 'bold'
             }
           }, {
-            content: gstAmount.toFixed(2),
+            content: formatINR(gstAmount),
             styles: {
               halign: 'right',
               fontStyle: 'bold'
@@ -297,7 +391,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               fontStyle: 'bold'
             }
           }, {
-            content: grandTotal.toFixed(2),
+            content: formatINR(grandTotal),
             styles: {
               halign: 'right',
               fontStyle: 'bold'
@@ -400,51 +494,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         window.open(doc.output("bloburl"), "_blank");
       }
     },
-    onRadioSelect: function _onRadioSelect(oEvent) {
-      // Get the index of the selected button (0 for first, 1 for second)
-      const iSelectedIndex = oEvent.getParameter("selectedIndex");
-
-      // Alternatively, get the specific RadioButton control
-      // const oSelectedButton = oEvent.getSource().getSelectedButton();
-      // const sText = oSelectedButton.getText();
-
-      const OPSQuote1 = this.getView()?.byId("idOPSQuote1");
-      const OPSQuote2 = this.getView()?.byId("idOPSQuote2");
-      const OPSQuote3 = this.getView()?.byId("idOPSQuoteTaxInc");
-      const OPSTaxInvc = this.getView()?.byId("idTaxSec");
-      const QuotationSec = this.getView()?.byId("idQuotationSec");
-      const idQuotation = this.getView()?.byId("idBtnQuotation");
-      const idInvoice = this.getView()?.byId("idBtnInvoice");
-      const chkBankDetail = this.getView()?.byId("chkBankDetail");
-      const chkGST = this.getView()?.byId("chkGST");
-      const chkTotal = this.getView()?.byId("chkTotal");
-      // Logic based on selection
-      if (iSelectedIndex === 0) {
-        // Quotation
-        OPSQuote1.setVisible(true);
-        OPSQuote2.setVisible(true);
-        QuotationSec.setVisible(true);
-        OPSQuote3.setVisible(false);
-        OPSTaxInvc.setVisible(false);
-        idQuotation.setVisible(true);
-        idInvoice.setVisible(false);
-        chkBankDetail.setVisible(true);
-        chkGST.setVisible(true);
-        chkTotal.setVisible(true);
-      } else {
-        // TAX-INVOICE
-        OPSQuote1.setVisible(false);
-        OPSQuote2.setVisible(false);
-        QuotationSec.setVisible(false);
-        OPSQuote3.setVisible(true);
-        OPSTaxInvc.setVisible(true);
-        idQuotation.setVisible(false);
-        idInvoice.setVisible(true);
-        chkBankDetail.setVisible(false);
-        chkGST.setVisible(false);
-        chkTotal.setVisible(false);
-      }
-    },
+    // TAX Invoice Section
     onTaxAddRow: function _onTaxAddRow() {
       const oModel = this.getView()?.getModel();
       const aProducts = oModel.getProperty("/taxProducts");
@@ -533,47 +583,64 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       doc.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
 
       // --- 1. Header Section ---
+      // doc.setFontSize(10);
+      // doc.text("TAX-INVOICE", 105, 10, { align: "center" });
+      // doc.text("Ph: 080-23481249", 170, 10);
+      // doc.line(startX, 12, endX, 12);
+      // doc.setFontSize(14);
+      // doc.setFont("helvetica", "bold");
+      // doc.setTextColor(255, 0, 0);
+      // doc.text("IN-TELECOM SERVICES", 105, 20, { align: "center" });
+      if (this.sLogoBase64) {
+        doc.addImage(this.sLogoBase64, 'JPEG', 14, 10, 70, 25);
+      }
+      // Company Contact Info (Right Aligned)
       doc.setFontSize(10);
-      doc.text("TAX-INVOICE", 105, 10, {
-        align: "center"
+      doc.text("Ph: (Off.): 2348 1249", pageWidth - 14, 15, {
+        align: 'right'
       });
-      doc.text("Ph: 080-23481249", 170, 10);
-      doc.line(startX, 12, endX, 12);
-      doc.setFontSize(14);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(255, 0, 0);
-      doc.text("IN-TELECOM SERVICES", 105, 20, {
-        align: "center"
+      doc.text("97400 27266 / 98442 11193", pageWidth - 14, 20, {
+        align: 'right'
       });
+      doc.text("E-mail: intelecompatil@rediffmail.com", pageWidth - 14, 25, {
+        align: 'right'
+      });
+      doc.setFontSize(9);
+      doc.text("#249, 7th Main, 4th Cross, 2nd Stage,", pageWidth - 14, 30, {
+        align: 'right'
+      });
+      doc.text("Nagarabhavi, Bangalore-560072", pageWidth - 14, 35, {
+        align: 'right'
+      });
+      doc.line(5, 40, pageWidth - 5, 40);
 
       // doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(0, 0, 255);
-      doc.text("#249, 7th Main, 4th Cross, 2nd Stage,Nagarabhavi, Bangalore-560072", 105, 25, {
-        align: "center"
-      });
-      doc.line(startX, 32, endX, 32); // Horizontal Line Division
+      // doc.setFontSize(9);
+      // doc.setTextColor(0, 0, 255);
+      // doc.text("#249, 7th Main, 4th Cross, 2nd Stage,Nagarabhavi, Bangalore-560072", 105, 25, { align: "center" });
+
+      // doc.line(startX, 32, endX, 32); // Horizontal Line Division
 
       // --- 2. Client & Invoice Info ---
       doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", "bold");
-      doc.text("To,", 15, 42);
+      doc.text("To,", 15, 44);
       doc.setFont("helvetica", "normal");
 
       // Billing Address (Left)
       const splitTo = doc.splitTextToSize(oData.taxHeader.To, 90);
-      doc.text(splitTo, 15, 47);
+      doc.text(splitTo, 15, 49);
 
       // Invoice Metadata (Right)
       const metaX = 130;
-      doc.text(`GST No: ${oData.taxHeader.GSTNo}`, metaX, 42);
-      doc.text(`Invoice No: ${oData.taxHeader.InvoiceNo}`, metaX, 48);
-      doc.text(`Date: ${oData.taxHeader.Date}`, metaX, 54);
-      doc.text(`PO No: ${oData.taxHeader.PONo}`, metaX, 60);
-      doc.text(`PO Date: ${oData.taxHeader.PODate}`, metaX, 66);
+      doc.text(`GST No: ${oData.taxHeader.GSTNo}`, metaX, 44);
+      doc.text(`Invoice No: ${oData.taxHeader.InvoiceNo}`, metaX, 50);
+      doc.text(`Date: ${oData.taxHeader.Date}`, metaX, 56);
+      doc.text(`PO No: ${oData.taxHeader.PONo}`, metaX, 62);
+      doc.text(`PO Date: ${oData.taxHeader.PODate}`, metaX, 68);
 
       // --- 3. Line Items Table ---
-      const tableRows = oData.taxProducts.map((item, index) => [index + 1, item.taxpProductName, item.taxHSNCode, Number(item.taxPrice).toFixed(2).toString(), item.taxQuantity, item.taxTotal]);
+      const tableRows = oData.taxProducts.map((item, index) => [index + 1, item.taxpProductName, item.taxHSNCode, formatINR(item.taxPrice) + item.taxSymbol, item.taxQuantity, formatINR(item.taxTotal)]);
 
       //Totals and Calculations ---
       const totalAmount = oData.taxProducts.reduce((sum, item) => sum + parseFloat(item.taxTotal), 0);
@@ -587,7 +654,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           fontStyle: 'bold'
         }
       }, {
-        content: totalAmount.toFixed(2),
+        content: formatINR(totalAmount),
         styles: {
           halign: 'right',
           fontStyle: 'bold'
@@ -599,7 +666,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           halign: 'right'
         }
       }, {
-        content: taxVal.toFixed(2),
+        content: formatINR(taxVal),
         styles: {
           halign: 'right'
         }
@@ -610,7 +677,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           halign: 'right'
         }
       }, {
-        content: taxVal.toFixed(2),
+        content: formatINR(taxVal),
         styles: {
           halign: 'right'
         }
@@ -623,7 +690,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           fontSize: 10
         }
       }, {
-        content: grandTotal.toFixed(2),
+        content: formatINR(grandTotal),
         styles: {
           halign: 'right',
           fontStyle: 'bold',
@@ -731,6 +798,165 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       // doc.text("For In-Telecom Services", 150, finalY + 63);
       // doc.text("Authorized Signatory", 150, finalY + 85);
       // SIGNATURE SECTION
+      const sigY = doc.internal.pageSize.height - 40;
+      if (this.sSignaturBase64) {
+        doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, sigY, 70, 25);
+      }
+      window.open(doc.output("bloburl"), "_blank");
+    },
+    // cash section
+    onCashAddRow: function _onCashAddRow() {
+      const oModel = this.getView()?.getModel();
+      const aProducts = oModel.getProperty("/cashProducts");
+      aProducts.push({
+        cashBody: "",
+        cashQuantity: "",
+        cashAmount: ""
+      });
+      oModel.setProperty("/cashProducts", aProducts);
+    },
+    onCashDelete: function _onCashDelete(oEvent) {
+      // 1. Get the item (row) that was clicked
+      const oItemToDelete = oEvent.getParameter("listItem");
+
+      // 2. Get the binding context path (e.g., "/products/2")
+      const sPath = oItemToDelete.getBindingContext().getPath();
+
+      // 3. Extract the index from the path
+      const iIndex = parseInt(sPath.split("/").pop());
+
+      // 4. Get the model and the data array
+      const oModel = this.getView()?.getModel();
+      const aProducts = oModel.getProperty("/cashProducts");
+
+      // 5. Remove the element at the specific index
+      aProducts.splice(iIndex, 1);
+
+      // 6. Update the model to refresh the UI
+      oModel.setProperty("/cashProducts", aProducts);
+    },
+    onCashBillPDF: function _onCashBillPDF() {
+      const jspdfLib = window.jspdf;
+      if (!jspdfLib) return;
+      const oModel = this.getView()?.getModel();
+      const oData = oModel.getData();
+      const doc = new jspdfLib.jsPDF();
+      const startX = 5;
+      const endX = 205;
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      const margin = 5;
+
+      // --- 0. SET PAGE BORDER ---
+      // rect(x, y, width, height)
+      doc.setDrawColor(0, 0, 0); // Black border
+      doc.setLineWidth(0.3);
+      doc.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
+
+      // --- 1. Header Section ---
+      if (this.sLogoBase64) {
+        doc.addImage(this.sLogoBase64, 'JPEG', 14, 10, 70, 25);
+      }
+      // Company Contact Info (Right Aligned)
+      doc.setFontSize(10);
+      doc.text("Ph: (Off.): 2348 1249", pageWidth - 14, 15, {
+        align: 'right'
+      });
+      doc.text("97400 27266 / 98442 11193", pageWidth - 14, 20, {
+        align: 'right'
+      });
+      doc.text("E-mail: intelecompatil@rediffmail.com", pageWidth - 14, 25, {
+        align: 'right'
+      });
+      doc.setFontSize(9);
+      doc.text("#249, 7th Main, 4th Cross, 2nd Stage,", pageWidth - 14, 30, {
+        align: 'right'
+      });
+      doc.text("Nagarabhavi, Bangalore-560072", pageWidth - 14, 35, {
+        align: 'right'
+      });
+      doc.line(5, 40, pageWidth - 5, 40);
+
+      // --- 2. Client & Invoice Info ---
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "bold");
+      doc.text("To,", 15, 46);
+      doc.setFont("helvetica", "normal");
+
+      // Billing Address (Left)
+      const splitTo = doc.splitTextToSize(oData.cashHeader.cashTo, 90);
+      doc.text(splitTo, 15, 51);
+
+      // Invoice Metadata (Right)
+      const metaX = 130;
+      doc.text(`Date: ${oData.cashHeader.cashDate}`, pageWidth - 14, 46, {
+        align: 'right'
+      });
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(`Cash Bill`, pageWidth / 2, 72, {
+        align: 'center'
+      });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      // --- 3. Line Items Table ---
+      const tableRows = oData.cashProducts.map((item, index) => [index + 1, item.cashBody, item.cashQuantity, formatINR(item.cashAmount)]);
+
+      //Totals and Calculations ---
+      const totalAmount = oData.cashProducts.reduce((sum, item) => sum + parseFloat(item.cashAmount), 0);
+      tableRows.push([{
+        content: `GRAND TOTAL:`,
+        colSpan: 3,
+        styles: {
+          halign: 'right',
+          fontStyle: 'bold',
+          fontSize: 10
+        }
+      }, {
+        content: formatINR(totalAmount),
+        styles: {
+          halign: 'right',
+          fontStyle: 'bold',
+          fontSize: 10
+        }
+      }]);
+      doc.autoTable({
+        startY: 75,
+        body: tableRows,
+        columnStyles: {
+          0: {
+            cellWidth: 15
+          },
+          1: {
+            cellWidth: 'auto'
+          },
+          2: {
+            cellWidth: 20,
+            halign: 'center'
+          },
+          3: {
+            cellWidth: 25,
+            halign: 'right'
+          },
+          4: {
+            cellWidth: 30,
+            halign: 'right'
+          }
+        }
+      });
+      const finalY = doc.lastAutoTable.finalY + 5;
+
+      // --- 5. Footer: Rupees, GST, and Bank ---
+      doc.line(startX, finalY + 5, endX, finalY + 5); // Division Line
+
+      doc.setFont("helvetica", "normal");
+      const amountInWords = this.numberToWords(totalAmount);
+      doc.text(`Rupees in words: ${amountInWords} Only`, 10, finalY + 10);
+      doc.setFont("helvetica", "bold");
+      doc.text("Bank Details", 10, finalY + 28);
+      doc.setFont("helvetica", "normal");
+      const splitBank = doc.splitTextToSize(oData.cashHeader.cashbankDetails, 100);
+      doc.text(splitBank, 10, finalY + 33);
       const sigY = doc.internal.pageSize.height - 40;
       if (this.sSignaturBase64) {
         doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, sigY, 70, 25);

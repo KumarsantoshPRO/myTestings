@@ -10,6 +10,17 @@ import Button from "sap/m/Button";
 import ObjectPageSection from "sap/uxap/ObjectPageSection";
 
 declare var jspdf: any;
+const formatINR = (amount: number | string): string => {
+    const value = typeof amount === 'string' ? parseFloat(amount) : amount;
+
+    if (isNaN(value)) return '0.00';
+
+    return new Intl.NumberFormat('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(value);
+};
+
 
 export default class View extends Controller {
     private sLogoBase64: string = "";
@@ -27,7 +38,7 @@ export default class View extends Controller {
                 BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
             },
             products: [
-                { productName: "", quantity: 0, price: 0, total: "0.00" }
+                { productName: "", quantity: 0, price: 0, symbol: "", total: "0.00" }
             ],
             taxHeader: {
                 To: "",
@@ -40,8 +51,21 @@ export default class View extends Controller {
                 BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
             },
             taxProducts: [
-                { taxpProductName: "", taxHSNCode: "", taxQuantity: 0, taxPrice: 0, taxTotal: "0.00" }
+                { taxpProductName: "", taxHSNCode: "", taxQuantity: 0, taxPrice: 0, taxSymbol: "", taxTotal: "0.00" }
+            ],
+            cashHeader: {
+                cashTo: "",
+                cashDate: "",
+                cashbankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
+            },
+            cashProducts: [
+                {
+                    cashBody: "",
+                    cashQuantity: "",
+                    cashAmount: ""
+                }
             ]
+
         };
         this.getView()?.setModel(new JSONModel(oData));
         this._loadLocalLogo("img/logo.jpg");
@@ -49,8 +73,12 @@ export default class View extends Controller {
         // (this.getView()?.byId("idPage") as Page).setTitle("Quotation");
         (this.getView()?.byId("idBtnQuotation") as Button).setVisible(true);
         (this.getView()?.byId("idBtnInvoice") as Button).setVisible(false);
+        (this.getView()?.byId("idBtnCash") as Button).setVisible(false);
         (this.getView()?.byId("idOPSQuoteTaxInc") as ObjectPageSection).setVisible(false);
         (this.getView()?.byId("idTaxSec") as ObjectPageSection).setVisible(false);
+        (this.getView()?.byId("idOPSCash") as ObjectPageSection).setVisible(false);
+        (this.getView()?.byId("idCashSecTab") as ObjectPageSection).setVisible(false);
+
     }
 
     private _loadLocalLogo(sRelativePath: string): void {
@@ -81,14 +109,87 @@ export default class View extends Controller {
         xhr.responseType = "blob";
         xhr.send();
     }
+    public onSelectChange(oEvent: any): void {
+        // Get the index of the selected button (0 for first, 1 for second)
+        const iSelectedText = oEvent.getParameter("selectedItem").getText();
 
+        // Alternatively, get the specific RadioButton control
+        // const oSelectedButton = oEvent.getSource().getSelectedButton();
+        // const sText = oSelectedButton.getText();
+
+
+        const OPSQuote1 = this.getView()?.byId("idOPSQuote1") as ObjectPageSection;
+        const OPSQuote2 = this.getView()?.byId("idOPSQuote2") as ObjectPageSection;
+        const OPSQuote3 = this.getView()?.byId("idOPSQuoteTaxInc") as ObjectPageSection;
+        const OPSTaxInvc = this.getView()?.byId("idTaxSec") as ObjectPageSection;
+        const QuotationSec = this.getView()?.byId("idQuotationSec") as ObjectPageSection;
+        const CashSec = this.getView()?.byId("idOPSCash") as ObjectPageSection;
+        const CashSecTab = this.getView()?.byId("idCashSecTab") as ObjectPageSection;
+
+
+        const idQuotation = this.getView()?.byId("idBtnQuotation") as Button;
+        const idInvoice = this.getView()?.byId("idBtnInvoice") as Button;
+        const idCashBill = this.getView()?.byId("idBtnCash") as Button;
+        const chkBankDetail = this.getView()?.byId("chkBankDetail") as CheckBox;
+        const chkGST = this.getView()?.byId("chkGST") as CheckBox;
+        const chkTotal = this.getView()?.byId("chkTotal") as CheckBox;
+        // Logic based on selection
+        if (iSelectedText === "Quotation") {
+            // Quotation
+            OPSQuote1.setVisible(true);
+            OPSQuote2.setVisible(true);
+            QuotationSec.setVisible(true);
+            OPSQuote3.setVisible(false);
+            OPSTaxInvc.setVisible(false);
+            idQuotation.setVisible(true);
+            idInvoice.setVisible(false);
+            chkBankDetail.setVisible(true);
+            chkGST.setVisible(true);
+            chkTotal.setVisible(true);
+            CashSec.setVisible(false);
+            CashSecTab.setVisible(false);
+            idCashBill.setVisible(false);
+
+        } else if (iSelectedText === "Cash Bill") {
+            // Cash Bill
+            OPSQuote1.setVisible(false);
+            OPSQuote2.setVisible(false);
+            QuotationSec.setVisible(false);
+            OPSQuote3.setVisible(false);
+            OPSTaxInvc.setVisible(false);
+            idQuotation.setVisible(false);
+            idInvoice.setVisible(false);
+            chkBankDetail.setVisible(false);
+            chkGST.setVisible(false);
+            chkTotal.setVisible(false);
+            CashSec.setVisible(true);
+            CashSecTab.setVisible(true);
+            idCashBill.setVisible(true);
+        } else {
+            // TAX-INVOICE
+            OPSQuote1.setVisible(false);
+            OPSQuote2.setVisible(false);
+            QuotationSec.setVisible(false);
+            OPSQuote3.setVisible(true);
+            OPSTaxInvc.setVisible(true);
+            idQuotation.setVisible(false);
+            idInvoice.setVisible(true);
+            chkBankDetail.setVisible(false);
+            chkGST.setVisible(false);
+            chkTotal.setVisible(false);
+            CashSec.setVisible(false);
+            CashSecTab.setVisible(false);
+            idCashBill.setVisible(false);
+        }
+    }
+
+    //Quotation Section
     public onAddRow(): void {
         const oModel = this.getView()?.getModel() as JSONModel;
         const aProducts = oModel.getProperty("/products");
-        aProducts.push({ productName: "", price: 0, quantity: 1, total: "0.00" });
+        aProducts.push({ productName: "", price: 0, symbol: "", quantity: 1, total: "0.00" });
         oModel.setProperty("/products", aProducts);
     }
-
     public onDelete(oEvent: any): void {
         // 1. Get the item (row) that was clicked
         const oItemToDelete = oEvent.getParameter("listItem");
@@ -185,7 +286,7 @@ export default class View extends Controller {
         return true; // All checks passed
     }
     public onGeneratePDF(): void {
-        if (this.validateForm()) {
+        if (true) {
             const jspdfLib = (window as any).jspdf;
             if (!jspdfLib) return;
 
@@ -242,8 +343,8 @@ export default class View extends Controller {
                 index + 1,
                 item.productName,
                 item.quantity,
-                Number(item.price).toFixed(2),
-                Number(item.total).toFixed(2)
+                formatINR(item.price) + item.symbol,
+                formatINR(item.total)
             ]);
 
             // 2. Calculate Totals
@@ -262,7 +363,7 @@ export default class View extends Controller {
                             styles: { halign: 'right', fontStyle: 'bold' }
                         },
                         {
-                            content: gstAmount.toFixed(2),
+                            content: formatINR(gstAmount),
                             styles: { halign: 'right', fontStyle: 'bold' }
                         }
                     ],
@@ -273,7 +374,7 @@ export default class View extends Controller {
                             styles: { halign: 'right', fontStyle: 'bold' }
                         },
                         {
-                            content: grandTotal.toFixed(2),
+                            content: formatINR(grandTotal),
                             styles: { halign: 'right', fontStyle: 'bold' }
                         }
                     ]
@@ -287,7 +388,7 @@ export default class View extends Controller {
                             styles: { halign: 'right', fontStyle: 'bold' }
                         },
                         {
-                            content: gstAmount.toFixed(2),
+                            content: formatINR(gstAmount),
                             styles: { halign: 'right', fontStyle: 'bold' }
                         }
                     ]
@@ -301,7 +402,7 @@ export default class View extends Controller {
                             styles: { halign: 'right', fontStyle: 'bold' }
                         },
                         {
-                            content: grandTotal.toFixed(2),
+                            content: formatINR(grandTotal),
                             styles: { halign: 'right', fontStyle: 'bold' }
                         }
                     ]
@@ -398,58 +499,9 @@ export default class View extends Controller {
         }
     }
 
-    public onRadioSelect(oEvent: RadioButtonGroup$SelectEvent): void {
-        // Get the index of the selected button (0 for first, 1 for second)
-        const iSelectedIndex = oEvent.getParameter("selectedIndex");
-
-        // Alternatively, get the specific RadioButton control
-        // const oSelectedButton = oEvent.getSource().getSelectedButton();
-        // const sText = oSelectedButton.getText();
 
 
-        const OPSQuote1 = this.getView()?.byId("idOPSQuote1") as ObjectPageSection;
-        const OPSQuote2 = this.getView()?.byId("idOPSQuote2") as ObjectPageSection;
-        const OPSQuote3 = this.getView()?.byId("idOPSQuoteTaxInc") as ObjectPageSection;
-        const OPSTaxInvc = this.getView()?.byId("idTaxSec") as ObjectPageSection;
-        const QuotationSec = this.getView()?.byId("idQuotationSec") as ObjectPageSection;
-
-        const idQuotation = this.getView()?.byId("idBtnQuotation") as Button;
-        const idInvoice = this.getView()?.byId("idBtnInvoice") as Button;
-        const chkBankDetail = this.getView()?.byId("chkBankDetail") as CheckBox;
-        const chkGST = this.getView()?.byId("chkGST") as CheckBox;
-        const chkTotal = this.getView()?.byId("chkTotal") as CheckBox;
-        // Logic based on selection
-        if (iSelectedIndex === 0) {
-            // Quotation
-            OPSQuote1.setVisible(true);
-            OPSQuote2.setVisible(true);
-            QuotationSec.setVisible(true);
-            OPSQuote3.setVisible(false);
-
-            OPSTaxInvc.setVisible(false);
-            idQuotation.setVisible(true);
-            idInvoice.setVisible(false);
-            chkBankDetail.setVisible(true);
-            chkGST.setVisible(true);
-            chkTotal.setVisible(true);
-
-        } else {
-            // TAX-INVOICE
-            OPSQuote1.setVisible(false);
-            OPSQuote2.setVisible(false);
-            QuotationSec.setVisible(false);
-            OPSQuote3.setVisible(true);
-            OPSTaxInvc.setVisible(true);
-            idQuotation.setVisible(false);
-            idInvoice.setVisible(true);
-            chkBankDetail.setVisible(false);
-            chkGST.setVisible(false);
-            chkTotal.setVisible(false);
-
-        }
-    }
-
-
+    // TAX Invoice Section
     public onTaxAddRow(): void {
         const oModel = this.getView()?.getModel() as JSONModel;
         const aProducts = oModel.getProperty("/taxProducts");
@@ -539,48 +591,61 @@ export default class View extends Controller {
 
 
         // --- 1. Header Section ---
+        // doc.setFontSize(10);
+        // doc.text("TAX-INVOICE", 105, 10, { align: "center" });
+        // doc.text("Ph: 080-23481249", 170, 10);
+        // doc.line(startX, 12, endX, 12);
+        // doc.setFontSize(14);
+        // doc.setFont("helvetica", "bold");
+        // doc.setTextColor(255, 0, 0);
+        // doc.text("IN-TELECOM SERVICES", 105, 20, { align: "center" });
+        if (this.sLogoBase64) {
+            doc.addImage(this.sLogoBase64, 'JPEG', 14, 10, 70, 25);
+        }
+        // Company Contact Info (Right Aligned)
         doc.setFontSize(10);
-        doc.text("TAX-INVOICE", 105, 10, { align: "center" });
-        doc.text("Ph: 080-23481249", 170, 10);
-        doc.line(startX, 12, endX, 12);
-        doc.setFontSize(14);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(255, 0, 0);
-        doc.text("IN-TELECOM SERVICES", 105, 20, { align: "center" });
+        doc.text("Ph: (Off.): 2348 1249", pageWidth - 14, 15, { align: 'right' });
+        doc.text("97400 27266 / 98442 11193", pageWidth - 14, 20, { align: 'right' });
+        doc.text("E-mail: intelecompatil@rediffmail.com", pageWidth - 14, 25, { align: 'right' });
+        doc.setFontSize(9);
+        doc.text("#249, 7th Main, 4th Cross, 2nd Stage,", pageWidth - 14, 30, { align: 'right' });
+        doc.text("Nagarabhavi, Bangalore-560072", pageWidth - 14, 35, { align: 'right' });
+
+        doc.line(5, 40, pageWidth - 5, 40);
 
         // doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(0, 0, 255);
-        doc.text("#249, 7th Main, 4th Cross, 2nd Stage,Nagarabhavi, Bangalore-560072", 105, 25, { align: "center" });
+        // doc.setFontSize(9);
+        // doc.setTextColor(0, 0, 255);
+        // doc.text("#249, 7th Main, 4th Cross, 2nd Stage,Nagarabhavi, Bangalore-560072", 105, 25, { align: "center" });
 
-        doc.line(startX, 32, endX, 32); // Horizontal Line Division
+        // doc.line(startX, 32, endX, 32); // Horizontal Line Division
 
         // --- 2. Client & Invoice Info ---
         doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "bold");
-        doc.text("To,", 15, 42);
+        doc.text("To,", 15, 44);
         doc.setFont("helvetica", "normal");
 
         // Billing Address (Left)
         const splitTo = doc.splitTextToSize(oData.taxHeader.To, 90);
-        doc.text(splitTo, 15, 47);
+        doc.text(splitTo, 15, 49);
 
         // Invoice Metadata (Right)
         const metaX = 130;
-        doc.text(`GST No: ${oData.taxHeader.GSTNo}`, metaX, 42);
-        doc.text(`Invoice No: ${oData.taxHeader.InvoiceNo}`, metaX, 48);
-        doc.text(`Date: ${oData.taxHeader.Date}`, metaX, 54);
-        doc.text(`PO No: ${oData.taxHeader.PONo}`, metaX, 60);
-        doc.text(`PO Date: ${oData.taxHeader.PODate}`, metaX, 66);
+        doc.text(`GST No: ${oData.taxHeader.GSTNo}`, metaX, 44);
+        doc.text(`Invoice No: ${oData.taxHeader.InvoiceNo}`, metaX, 50);
+        doc.text(`Date: ${oData.taxHeader.Date}`, metaX, 56);
+        doc.text(`PO No: ${oData.taxHeader.PONo}`, metaX, 62);
+        doc.text(`PO Date: ${oData.taxHeader.PODate}`, metaX, 68);
 
         // --- 3. Line Items Table ---
         const tableRows = oData.taxProducts.map((item: any, index: number) => [
             index + 1,
             item.taxpProductName,
             item.taxHSNCode,
-            Number(item.taxPrice).toFixed(2).toString(),
+            formatINR(item.taxPrice)+ item.taxSymbol,
             item.taxQuantity,
-            item.taxTotal
+            formatINR(item.taxTotal)
         ]);
 
         //Totals and Calculations ---
@@ -588,10 +653,10 @@ export default class View extends Controller {
         const taxVal = totalAmount * 0.09; // CGST/SGST 9%[span_13](end_span)
         const grandTotal = totalAmount + (taxVal * 2);
         tableRows.push(
-            [{ content: `TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } }, { content: totalAmount.toFixed(2), styles: { halign: 'right', fontStyle: 'bold' } }],
-            [{ content: `CGST @ 9%:`, colSpan: 5, styles: { halign: 'right' } }, { content: taxVal.toFixed(2), styles: { halign: 'right' } }],
-            [{ content: `SGST @ 9%:`, colSpan: 5, styles: { halign: 'right' } }, { content: taxVal.toFixed(2), styles: { halign: 'right' } }],
-            [{ content: `GRAND TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }, { content: grandTotal.toFixed(2), styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }]
+            [{ content: `TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(totalAmount), styles: { halign: 'right', fontStyle: 'bold' } }],
+            [{ content: `CGST @ 9%:`, colSpan: 5, styles: { halign: 'right' } }, { content: formatINR(taxVal), styles: { halign: 'right' } }],
+            [{ content: `SGST @ 9%:`, colSpan: 5, styles: { halign: 'right' } }, { content: formatINR(taxVal), styles: { halign: 'right' } }],
+            [{ content: `GRAND TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }, { content: formatINR(grandTotal), styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }]
         );
 
         (doc as any).autoTable({
@@ -679,6 +744,146 @@ export default class View extends Controller {
         // doc.text("For In-Telecom Services", 150, finalY + 63);
         // doc.text("Authorized Signatory", 150, finalY + 85);
         // SIGNATURE SECTION
+        const sigY = doc.internal.pageSize.height - 40;
+
+        if (this.sSignaturBase64) {
+            doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, sigY, 70, 25);
+        }
+        window.open(doc.output("bloburl"), "_blank");
+    }
+
+    // cash section
+    public onCashAddRow(): void {
+        const oModel = this.getView()?.getModel() as JSONModel;
+        const aProducts = oModel.getProperty("/cashProducts");
+        aProducts.push({
+            cashBody: "",
+            cashQuantity: "",
+            cashAmount: ""
+        });
+        oModel.setProperty("/cashProducts", aProducts);
+    }
+    public onCashDelete(oEvent: any): void {
+        // 1. Get the item (row) that was clicked
+        const oItemToDelete = oEvent.getParameter("listItem");
+
+        // 2. Get the binding context path (e.g., "/products/2")
+        const sPath = oItemToDelete.getBindingContext().getPath();
+
+        // 3. Extract the index from the path
+        const iIndex = parseInt(sPath.split("/").pop());
+
+        // 4. Get the model and the data array
+        const oModel = this.getView()?.getModel() as JSONModel;
+        const aProducts = oModel.getProperty("/cashProducts");
+
+        // 5. Remove the element at the specific index
+        aProducts.splice(iIndex, 1);
+
+        // 6. Update the model to refresh the UI
+        oModel.setProperty("/cashProducts", aProducts);
+    }
+    public onCashBillPDF(): void {
+
+        const jspdfLib = (window as any).jspdf;
+        if (!jspdfLib) return;
+        const oModel = this.getView()?.getModel() as JSONModel;
+        const oData = oModel.getData();
+        const doc = new jspdfLib.jsPDF();
+        const startX = 5;
+        const endX = 205;
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5;
+
+        // --- 0. SET PAGE BORDER ---
+        // rect(x, y, width, height)
+        doc.setDrawColor(0, 0, 0); // Black border
+        doc.setLineWidth(0.3);
+        doc.rect(margin, margin, pageWidth - (margin * 2), pageHeight - (margin * 2));
+
+
+        // --- 1. Header Section ---
+        if (this.sLogoBase64) {
+            doc.addImage(this.sLogoBase64, 'JPEG', 14, 10, 70, 25);
+        }
+        // Company Contact Info (Right Aligned)
+        doc.setFontSize(10);
+        doc.text("Ph: (Off.): 2348 1249", pageWidth - 14, 15, { align: 'right' });
+        doc.text("97400 27266 / 98442 11193", pageWidth - 14, 20, { align: 'right' });
+        doc.text("E-mail: intelecompatil@rediffmail.com", pageWidth - 14, 25, { align: 'right' });
+        doc.setFontSize(9);
+        doc.text("#249, 7th Main, 4th Cross, 2nd Stage,", pageWidth - 14, 30, { align: 'right' });
+        doc.text("Nagarabhavi, Bangalore-560072", pageWidth - 14, 35, { align: 'right' });
+
+        doc.line(5, 40, pageWidth - 5, 40);
+
+
+
+        // --- 2. Client & Invoice Info ---
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "bold");
+        doc.text("To,", 15, 46);
+        doc.setFont("helvetica", "normal");
+
+        // Billing Address (Left)
+        const splitTo = doc.splitTextToSize(oData.cashHeader.cashTo, 90);
+        doc.text(splitTo, 15, 51);
+
+        // Invoice Metadata (Right)
+        const metaX = 130;
+
+
+        doc.text(`Date: ${oData.cashHeader.cashDate}`, pageWidth - 14, 46, { align: 'right' });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text(`Cash Bill`, pageWidth / 2, 72, { align: 'center' });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        // --- 3. Line Items Table ---
+        const tableRows = oData.cashProducts.map((item: any, index: number) => [
+            index + 1,
+            item.cashBody,
+            item.cashQuantity,
+            formatINR(item.cashAmount)
+        ]);
+
+        //Totals and Calculations ---
+        const totalAmount = oData.cashProducts.reduce((sum: number, item: any) => sum + parseFloat(item.cashAmount), 0);
+
+        tableRows.push(
+            [{ content: `GRAND TOTAL:`, colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } },
+            { content: formatINR(totalAmount), styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }]
+        );
+
+        (doc as any).autoTable({
+            startY: 75,
+            body: tableRows,
+            columnStyles: {
+                0: { cellWidth: 15 },
+                1: { cellWidth: 'auto' },
+                2: { cellWidth: 20, halign: 'center' },
+                3: { cellWidth: 25, halign: 'right' },
+                4: { cellWidth: 30, halign: 'right' }
+            }
+        });
+
+        const finalY = (doc as any).lastAutoTable.finalY + 5;
+
+        // --- 5. Footer: Rupees, GST, and Bank ---
+        doc.line(startX, finalY + 5, endX, finalY + 5); // Division Line
+
+        doc.setFont("helvetica", "normal");
+        const amountInWords = this.numberToWords(totalAmount);
+        doc.text(`Rupees in words: ${amountInWords} Only`, 10, finalY + 10);
+
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Bank Details", 10, finalY + 28);
+        doc.setFont("helvetica", "normal");
+        const splitBank = doc.splitTextToSize(oData.cashHeader.cashbankDetails, 100);
+        doc.text(splitBank, 10, finalY + 33);
+
         const sigY = doc.internal.pageSize.height - 40;
 
         if (this.sSignaturBase64) {
