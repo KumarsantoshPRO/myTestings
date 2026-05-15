@@ -27,14 +27,14 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         },
         products: [{
           productName: "",
-          quantity: 0,
+          quantity: 1,
           price: 0,
           symbol: "",
           total: "0.00"
         }],
         taxHeader: {
           To: "",
-          GSTNo: "",
+          GSTNo: "29AGKPP7288F1Z0",
           InvoiceNo: "",
           Date: "",
           PONo: "",
@@ -45,7 +45,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         taxProducts: [{
           taxpProductName: "",
           taxHSNCode: "",
-          taxQuantity: 0,
+          taxQuantity: 1,
           taxPrice: 0,
           taxSymbol: "",
           taxTotal: "0.00"
@@ -215,11 +215,12 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         const fQty = oProduct.quantity;
         const fPrice = parseFloat(oProduct.price) || 0;
         let fRowTotal = 0;
-        if (typeof fQty === "string") {
-          fRowTotal = fPrice;
-        } else if (typeof fQty === "number") {
-          fRowTotal = fQty * fPrice;
-        }
+        // if (typeof fQty === "string") {
+        //     fRowTotal = fPrice;
+        // }
+        // else if (typeof fQty === "number") {
+        fRowTotal = fQty * fPrice;
+        // }
 
         // Update the row total in the model
         oProduct.total = fRowTotal.toFixed(2);
@@ -447,15 +448,15 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         // // Conditional Logic for GST Amount
 
         // if (bShowGST) {
-        //     finalY = finalY + 4;
-        //     doc.text("18% GST Amount", 14, finalY); //[span_16](end_span)
-        //     doc.text(gstAmount.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
+        // finalY = finalY + 4;
+        // doc.text("18% GST Amount", 14, finalY); //[span_16](end_span)
+        // doc.text(gstAmount.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
         // }
         // // Conditional Logic for Grand Total
         // if (bShowTotal) {
-        //     finalY = finalY + 4;
-        //     doc.text("Total", 14, finalY); //[span_16](end_span)
-        //     doc.text(grandTotal.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
+        // finalY = finalY + 4;
+        // doc.text("Total", 14, finalY); //[span_16](end_span)
+        // doc.text(grandTotal.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
         // }
 
         // Terms & Conditions ---

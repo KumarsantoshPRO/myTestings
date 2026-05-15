@@ -14,6 +14,7 @@
     >
         <uxap:headerTitle>
             <uxap:ObjectPageHeader objectTitle="IN-TELECOM SERVICES">
+                <Text text="GST No: 29AGKPP7288F1Z0" />
                 <Select
                     id="mySelect"
                     change=".onSelectChange"
@@ -223,11 +224,12 @@
                                         <Text text="Particulars" />
                                     </Column>
                                     <Column hAlign="Center">
-                                        <Text text="Qty" />
+                                        <Text text="Rate " />
                                     </Column>
                                     <Column hAlign="Center">
-                                        <Text text="Rate" />
+                                        <Text text="Quantity and Symbol" />
                                     </Column>
+
                                     <Column hAlign="Center">
                                         <Text text="Total" />
                                     </Column>
@@ -241,15 +243,19 @@
                                             />
                                             <TextArea value="{productName}" />
                                             <Input
-                                                value="{quantity}"
+                                                value="{price}"
                                                 change=".onCalc"
                                             />
+
                                             <HBox>
                                                 <Input
-                                                    value="{price}"
+                                                    value="{quantity}"
                                                     change=".onCalc"
                                                 />
-                                                <Input value="{symbol}" />
+                                                <Input
+                                                    value="{symbol}"
+                                                    placeholder="Symbol"
+                                                />
                                             </HBox>
                                             <Text text="{total}" />
                                         </cells>
@@ -313,10 +319,10 @@
                                         <Text text="HSN Code" />
                                     </Column>
                                     <Column hAlign="Center">
-                                        <Text text="Qty" />
+                                        <Text text="Rate" />
                                     </Column>
                                     <Column hAlign="Center">
-                                        <Text text="Rate and Symbol" />
+                                        <Text text="Quantity and Symbol" />
                                     </Column>
                                     <Column hAlign="Center">
                                         <Text text="Total" />
@@ -334,17 +340,17 @@
                                             />
                                             <Input value="{taxHSNCode}" />
                                             <Input
-                                                value="{taxQuantity}"
+                                                value="{taxPrice}"
                                                 change=".onTaxCalc"
                                             />
                                             <HBox>
                                                 <Input
-                                                    value="{taxPrice}"
+                                                    value="{taxQuantity}"
                                                     change=".onTaxCalc"
                                                 />
                                                 <Input
                                                     value="{taxSymbol}"
-                                                    placeholder="eg. R.T.M"
+                                                    placeholder="symbol"
                                                 />
                                             </HBox>
                                             <Text text="{taxTotal}" />
@@ -471,7 +477,10 @@
                                             <Text
                                                 text="{= ${/cashProducts}.indexOf(${path: ''}) + 1 }"
                                             />
-                                            <TextArea value="{cashBody}" width="40rem"/>
+                                            <TextArea
+                                                value="{cashBody}"
+                                                width="40rem"
+                                            />
                                             <Input value="{cashQuantity}" />
                                             <Input value="{cashAmount}" />
                                         </cells>
@@ -501,7 +510,7 @@
                     press="onTaxInvoicePDF"
                 />
 
-                  <Button
+                <Button
                     id="idBtnCash"
                     icon="sap-icon://pdf-attachment"
                     text="Bill Cash"

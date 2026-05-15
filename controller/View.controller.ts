@@ -38,11 +38,11 @@ export default class View extends Controller {
                 BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
             },
             products: [
-                { productName: "", quantity: 0, price: 0, symbol: "", total: "0.00" }
+                { productName: "", quantity: 1, price: 0, symbol: "", total: "0.00" }
             ],
             taxHeader: {
                 To: "",
-                GSTNo: "",
+                GSTNo: "29AGKPP7288F1Z0",
                 InvoiceNo: "",
                 Date: "",
                 PONo: "",
@@ -51,7 +51,7 @@ export default class View extends Controller {
                 BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
             },
             taxProducts: [
-                { taxpProductName: "", taxHSNCode: "", taxQuantity: 0, taxPrice: 0, taxSymbol: "", taxTotal: "0.00" }
+                { taxpProductName: "", taxHSNCode: "", taxQuantity: 1, taxPrice: 0, taxSymbol: "", taxTotal: "0.00" }
             ],
             cashHeader: {
                 cashTo: "",
@@ -224,12 +224,12 @@ export default class View extends Controller {
             const fPrice = parseFloat(oProduct.price) || 0;
 
             let fRowTotal = 0;
-            if (typeof fQty === "string") {
-                fRowTotal = fPrice;
-            }
-            else if (typeof fQty === "number") {
+            // if (typeof fQty === "string") {
+            //     fRowTotal = fPrice;
+            // }
+            // else if (typeof fQty === "number") {
                 fRowTotal = fQty * fPrice;
-            }
+            // }
 
             // Update the row total in the model
             oProduct.total = fRowTotal.toFixed(2);
@@ -445,15 +445,15 @@ export default class View extends Controller {
             // // Conditional Logic for GST Amount
 
             // if (bShowGST) {
-            //     finalY = finalY + 4;
-            //     doc.text("18% GST Amount", 14, finalY); //[span_16](end_span)
-            //     doc.text(gstAmount.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
+            // finalY = finalY + 4;
+            // doc.text("18% GST Amount", 14, finalY); //[span_16](end_span)
+            // doc.text(gstAmount.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
             // }
             // // Conditional Logic for Grand Total
             // if (bShowTotal) {
-            //     finalY = finalY + 4;
-            //     doc.text("Total", 14, finalY); //[span_16](end_span)
-            //     doc.text(grandTotal.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
+            // finalY = finalY + 4;
+            // doc.text("Total", 14, finalY); //[span_16](end_span)
+            // doc.text(grandTotal.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
             // }
 
             // Terms & Conditions ---
