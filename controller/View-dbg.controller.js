@@ -28,7 +28,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         products: [{
           productName: "",
           quantity: 1,
-          price: 0,
+          price: "",
           symbol: "",
           total: "0.00"
         }],
@@ -176,7 +176,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       const aProducts = oModel.getProperty("/products");
       aProducts.push({
         productName: "",
-        price: 0,
+        price: "0.00",
         symbol: "",
         quantity: 1,
         total: "0.00"
@@ -212,7 +212,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       let gstAmount = 0;
       aProducts.forEach(oProduct => {
         // 1. Calculate individual row total
-        const fQty = oProduct.quantity;
+        const fQty = parseFloat(oProduct.quantity) || 0;
         const fPrice = parseFloat(oProduct.price) || 0;
         let fRowTotal = 0;
         // if (typeof fQty === "string") {
@@ -331,7 +331,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         const bShowGST = (this.getView()?.byId("chkGST")).getSelected();
         const bShowTotal = (this.getView()?.byId("chkTotal")).getSelected();
         // 1. Prepare standard product rows
-        const tableBody = aItems.map((item, index) => [index + 1, item.productName, item.quantity, formatINR(item.price) + item.symbol, formatINR(item.total)]);
+        const tableBody = aItems.map((item, index) => [index + 1, item.productName, item.quantity, item.price + item.symbol, formatINR(item.total)]);
 
         // 2. Calculate Totals
         const subtotal = aItems.reduce((acc, cur) => acc + parseFloat(cur.total || 0), 0);

@@ -38,7 +38,7 @@ export default class View extends Controller {
                 BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
             },
             products: [
-                { productName: "", quantity: 1, price: 0, symbol: "", total: "0.00" }
+                { productName: "", quantity: 1, price: "", symbol: "", total: "0.00" }
             ],
             taxHeader: {
                 To: "",
@@ -187,7 +187,7 @@ export default class View extends Controller {
     public onAddRow(): void {
         const oModel = this.getView()?.getModel() as JSONModel;
         const aProducts = oModel.getProperty("/products");
-        aProducts.push({ productName: "", price: 0, symbol: "", quantity: 1, total: "0.00" });
+        aProducts.push({ productName: "", price: "0.00", symbol: "", quantity: 1, total: "0.00" });
         oModel.setProperty("/products", aProducts);
     }
     public onDelete(oEvent: any): void {
@@ -220,7 +220,7 @@ export default class View extends Controller {
 
         aProducts.forEach((oProduct: any) => {
             // 1. Calculate individual row total
-            const fQty = oProduct.quantity;
+            const fQty = parseFloat(oProduct.quantity)|| 0;
             const fPrice = parseFloat(oProduct.price) || 0;
 
             let fRowTotal = 0;
@@ -343,7 +343,7 @@ export default class View extends Controller {
                 index + 1,
                 item.productName,
                 item.quantity,
-                formatINR(item.price) + item.symbol,
+                item.price + item.symbol,
                 formatINR(item.total)
             ]);
 
