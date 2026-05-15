@@ -494,6 +494,20 @@
         </uxap:sections>
         <uxap:footer>
             <OverflowToolbar>
+                <Button
+                    id="idBtnSaveLocalStorage"
+                    icon="sap-icon://save"
+                    text="Save Draft"
+                    type="Emphasized"
+                    press="onSaveLocalStorage"
+                />
+                <Button
+                    id="idBtnClearLocalStorage"
+                    icon="sap-icon://delete"
+                    text="Clear Draft"
+                    type="Reject"
+                    press="onClearLocalStorage"
+                />
                 <ToolbarSpacer />
                 <Button
                     id="idBtnQuotation"

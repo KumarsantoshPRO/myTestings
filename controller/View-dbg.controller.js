@@ -1,4 +1,4 @@
-sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap/m/MessageBox"], function (Controller, JSONModel, MessageBox) {
+sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap/m/MessageBox", "sap/m/MessageToast"], function (Controller, JSONModel, MessageBox, MessageToast) {
   "use strict";
 
   const formatINR = amount => {
@@ -14,53 +14,68 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       Controller.prototype.constructor.apply(this, arguments);
       this.sLogoBase64 = "";
       this.sSignaturBase64 = "";
+      this.sStorageKey = "my_billing_app_draft_data";
     },
     onInit: function _onInit() {
-      const oData = {
-        header: {
-          To: "",
-          Date: "",
-          Subject: "",
-          Notes: "",
-          TermsAndConditions: "",
-          BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
-        },
-        products: [{
-          productName: "",
-          quantity: 1,
-          price: "",
-          symbol: "",
-          total: "0.00"
-        }],
-        taxHeader: {
-          To: "",
-          GSTNo: "29AGKPP7288F1Z0",
-          InvoiceNo: "",
-          Date: "",
-          PONo: "",
-          PODate: "",
-          PartyGST: "",
-          BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
-        },
-        taxProducts: [{
-          taxpProductName: "",
-          taxHSNCode: "",
-          taxQuantity: 1,
-          taxPrice: 0,
-          taxSymbol: "",
-          taxTotal: "0.00"
-        }],
-        cashHeader: {
-          cashTo: "",
-          cashDate: "",
-          cashbankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
-        },
-        cashProducts: [{
-          cashBody: "",
-          cashQuantity: "",
-          cashAmount: ""
-        }]
-      };
+      let oData;
+      const sSavedData = localStorage.getItem(this.sStorageKey);
+      if (sSavedData) {
+        try {
+          oData = JSON.parse(sSavedData);
+        } catch (e) {
+          // If parsing fails for any reason, fallback to default state
+          oData = null;
+        }
+      }
+
+      // Fallback default state structure if no local storage draft exists
+      if (!oData) {
+        oData = {
+          header: {
+            To: "",
+            Date: "",
+            Subject: "",
+            Notes: "",
+            TermsAndConditions: "",
+            BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
+          },
+          products: [{
+            productName: "",
+            quantity: 1,
+            price: "",
+            symbol: "",
+            total: "0.00"
+          }],
+          taxHeader: {
+            To: "",
+            GSTNo: "29AGKPP7288F1Z0",
+            InvoiceNo: "",
+            Date: "",
+            PONo: "",
+            PODate: "",
+            PartyGST: "",
+            BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
+          },
+          taxProducts: [{
+            taxpProductName: "",
+            taxHSNCode: "",
+            taxQuantity: 1,
+            taxPrice: 0,
+            taxSymbol: "",
+            taxTotal: "0.00"
+          }],
+          cashHeader: {
+            cashTo: "",
+            cashDate: "",
+            cashbankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
+          },
+          cashProducts: [{
+            cashBody: "",
+            cashQuantity: "",
+            cashAmount: ""
+          }]
+        };
+      }
       this.getView()?.setModel(new JSONModel(oData));
       this._loadLocalLogo("img/logo.jpg");
       this._loadSignature("img/Signature.jpg");
@@ -72,6 +87,35 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       (this.getView()?.byId("idTaxSec")).setVisible(false);
       (this.getView()?.byId("idOPSCash")).setVisible(false);
       (this.getView()?.byId("idCashSecTab")).setVisible(false);
+    },
+    /**
+     * Logic to save current model content explicitly into local storage
+     */
+    onSaveLocalStorage: function _onSaveLocalStorage() {
+      const oModel = this.getView()?.getModel();
+      if (oModel) {
+        const oData = oModel.getData();
+        localStorage.setItem(this.sStorageKey, JSON.stringify(oData));
+        MessageToast.show("Form data successfully saved locally!");
+      } else {
+        MessageBox.error("Error updating model context details.");
+      }
+    },
+    /**
+     * Logic to clear local storage cache and reload view state 
+     */
+    onClearLocalStorage: function _onClearLocalStorage() {
+      MessageBox.confirm("Are you sure you want to clear your saved draft?", {
+        actions: [MessageBox.Action.YES, MessageBox.Action.NO],
+        onClose: sAction => {
+          if (sAction === MessageBox.Action.YES) {
+            localStorage.removeItem(this.sStorageKey);
+            MessageToast.show("Saved data deleted. Refreshing page layout.");
+            // Reinitialize model context dynamically
+            this.onInit();
+          }
+        }
+      });
     },
     _loadLocalLogo: function _loadLocalLogo(sRelativePath) {
       const sFullUrl = sap.ui.require.toUrl("my/app/generatebill/" + sRelativePath);
@@ -216,7 +260,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         const fPrice = parseFloat(oProduct.price) || 0;
         let fRowTotal = 0;
         // if (typeof fQty === "string") {
-        //     fRowTotal = fPrice;
+        // fRowTotal = fPrice;
         // }
         // else if (typeof fQty === "number") {
         fRowTotal = fQty * fPrice;
@@ -316,7 +360,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         });
         doc.line(5, 40, pageWidth - 5, 40);
 
-        // TO / SUB / DATE SECTION 
+        // TO / SUB / DATE SECTION
         doc.setFont("helvetica", "bold");
         doc.text(`Date: ${oHeader.Date}`, pageWidth - 14, 45, {
           align: 'right'
@@ -449,13 +493,13 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
 
         // if (bShowGST) {
         // finalY = finalY + 4;
-        // doc.text("18% GST Amount", 14, finalY); //[span_16](end_span)
+        // doc.text("18% GST Amount", 14, finalY);
         // doc.text(gstAmount.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
         // }
         // // Conditional Logic for Grand Total
         // if (bShowTotal) {
         // finalY = finalY + 4;
-        // doc.text("Total", 14, finalY); //[span_16](end_span)
+        // doc.text("Total", 14, finalY);
         // doc.text(grandTotal.toFixed(2), pageWidth - 14, finalY, { align: 'right' });
         // }
 
@@ -645,7 +689,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
 
       //Totals and Calculations ---
       const totalAmount = oData.taxProducts.reduce((sum, item) => sum + parseFloat(item.taxTotal), 0);
-      const taxVal = totalAmount * 0.09; // CGST/SGST 9%[span_13](end_span)
+      const taxVal = totalAmount * 0.09; // CGST/SGST 9%
       const grandTotal = totalAmount + taxVal * 2;
       tableRows.push([{
         content: `TOTAL:`,
