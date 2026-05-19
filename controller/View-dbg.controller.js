@@ -1020,22 +1020,45 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
     numberToWords: function _numberToWords(num) {
       const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
       const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-      const regex = new RegExp('[0-9]{1,9}');
-      const number = num.toString();
-      if (!regex.test(number)) return '';
       if (num === 0) return 'Zero';
 
-      // Split into segments for Crore, Lakh, Thousand, and Hundreds
-      const n = ('000000000' + number).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-      if (!n) return '';
-      let str = '';
-      // Use Number() to convert string indices to numbers for array access
-      str += Number(n[1]) !== 0 ? (a[Number(n[1])] || b[Number(n[1][0])] + ' ' + a[Number(n[1][1])]) + 'Crore ' : '';
-      str += Number(n[2]) !== 0 ? (a[Number(n[2])] || b[Number(n[2][0])] + ' ' + a[Number(n[2][1])]) + 'Lakh ' : '';
-      str += Number(n[3]) !== 0 ? (a[Number(n[3])] || b[Number(n[3][0])] + ' ' + a[Number(n[3][1])]) + 'Thousand ' : '';
-      str += Number(n[4]) !== 0 ? (a[Number(n[4])] || b[Number(n[4][0])] + ' ' + a[Number(n[4][1])]) + 'Hundred ' : '';
-      str += Number(n[5]) !== 0 ? (str !== '' ? 'and ' : '') + (a[Number(n[5])] || b[Number(n[5][0])] + ' ' + a[Number(n[5][1])]) : '';
-      return str.trim();
+      // Helper function to convert up to 9 digit whole numbers to Indian numbering system words
+      const convertWholeNumber = amountStr => {
+        const n = ('000000000' + amountStr).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+        if (!n) return '';
+        let str = '';
+        str += Number(n[1]) !== 0 ? (a[Number(n[1])] || b[Number(n[1][0])] + ' ' + a[Number(n[1][1])]) + 'Crore ' : '';
+        str += Number(n[2]) !== 0 ? (a[Number(n[2])] || b[Number(n[2][0])] + ' ' + a[Number(n[2][1])]) + 'Lakh ' : '';
+        str += Number(n[3]) !== 0 ? (a[Number(n[3])] || b[Number(n[3][0])] + ' ' + a[Number(n[3][1])]) + 'Thousand ' : '';
+        str += Number(n[4]) !== 0 ? (a[Number(n[4])] || b[Number(n[4][0])] + ' ' + a[Number(n[4][1])]) + 'Hundred ' : '';
+        str += Number(n[5]) !== 0 ? (str !== '' ? 'and ' : '') + (a[Number(n[5])] || b[Number(n[5][0])] + ' ' + a[Number(n[5][1])]) : '';
+        return str.trim();
+      };
+
+      // Fix to preserve trailing zeros in decimals (like .50 instead of .5)
+      const fixedNumStr = num.toFixed(2);
+      const parts = fixedNumStr.split('.');
+      const rupeePart = parts[0];
+      const paisaPart = parts[1];
+      let result = '';
+
+      // 1. Process the Rupee / Whole number part
+      if (Number(rupeePart) > 0) {
+        result += convertWholeNumber(rupeePart);
+      } else if (Number(paisaPart) > 0) {
+        result += 'Zero'; // e.g., "Zero and Fifty Paise"
+      }
+
+      // 2. Process the Paise / Decimal part
+      if (paisaPart && Number(paisaPart) > 0) {
+        // Use the same logic format for a 2-digit number block
+        const p = paisaPart.match(/^(\d{2})$/);
+        if (p) {
+          const paisaWords = a[Number(p[1])] || b[Number(p[1][0])] + ' ' + a[Number(p[1][1])];
+          result += (result !== '' ? ' and ' : '') + paisaWords.trim() + ' Paise';
+        }
+      }
+      return result.trim();
     }
   });
   return View;
