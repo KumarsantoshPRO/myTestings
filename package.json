@@ -20,6 +20,7 @@
   },
   "scripts": {
     "start-HTML": "fiori run --open \"/index.html?sap-ui-xx-viewCache=false\"",
+    "deploy and push": "npm run build && gh-pages -d dist && git add . && git commit -m \"deploy: automatic update\" && git push origin main",
     "start": "fiori run --open \"test/flp.html#app-preview\"",
     "start-local": "fiori run --config ./ui5-local.yaml --open \"test/flp.html#app-preview\"",
     "build": "ui5 build --config=ui5.yaml --clean-dest --dest dist",

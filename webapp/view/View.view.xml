@@ -74,6 +74,13 @@
                                     growing="true"
                                     placeholder="e.g., Supply and Installment of camera"
                                 />
+                                <Label text="Addtional Info" />
+                                <TextArea
+                                    value="{/header/AddtionalInfo}"
+                                    rows="2"
+                                    growing="true"
+                                    placeholder="e.g., Sub line below subject"
+                                />
                             </f:content>
                         </f:SimpleForm>
                     </uxap:ObjectPageSubSection>
@@ -494,6 +501,20 @@
         </uxap:sections>
         <uxap:footer>
             <OverflowToolbar>
+                <Button
+                    id="idBtnSaveLocalStorage"
+                    icon="sap-icon://save"
+                    text="Save Draft"
+                    type="Emphasized"
+                    press="onSaveLocalStorage"
+                />
+                <Button
+                    id="idBtnClearLocalStorage"
+                    icon="sap-icon://delete"
+                    text="Clear Draft"
+                    type="Reject"
+                    press="onClearLocalStorage"
+                />
                 <ToolbarSpacer />
                 <Button
                     id="idBtnQuotation"
