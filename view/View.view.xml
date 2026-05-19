@@ -5,6 +5,7 @@
     xmlns:f="sap.ui.layout.form"
     xmlns:core="sap.ui.core"
     xmlns:uxap="sap.uxap"
+    xmlns:u="sap.ui.unified"
     displayBlock="true"
 >
     <uxap:ObjectPageLayout
@@ -153,11 +154,23 @@
                                     value="{/taxHeader/GSTNo}"
                                     placeholder="Enter GST No"
                                 />
+                                
                                 <Label text="Invoice No" />
                                 <Input
+                                    id="idTaxInvoiceNoInput"
                                     value="{/taxHeader/InvoiceNo}"
-                                    placeholder="Enter Invoice No"
+                                    placeholder="Auto-generated sequence"
+                                    editable="true"
                                 />
+                                
+                                <Label text="" />
+                                <Button 
+                                    icon="sap-icon://chain-link" 
+                                    text="Get Next Invoice No" 
+                                    press=".onGenerateNextInvoiceNumber"
+                                    type="Emphasized"
+                                />
+                                
                                 <Label text="Date" />
                                 <DatePicker
                                     value="{/taxHeader/Date}"
@@ -215,6 +228,20 @@
                                     <OverflowToolbar>
                                         <Title text="Line Items" />
                                         <ToolbarSpacer />
+                                        <u:FileUploader 
+                                            id="uploadQuotationExcel"
+                                            buttonOnly="true" 
+                                            iconOnly="true"
+                                            icon="sap-icon://upload"
+                                            tooltip="Upload Excel File"
+                                            change=".onExcelUpload"
+                                            fileType="xlsx"
+                                        />
+                                        <Button
+                                            icon="sap-icon://download"
+                                            text="Excel"
+                                            press=".onExcelDownload"
+                                        />
                                         <Button
                                             icon="sap-icon://add"
                                             text="Add Row"
@@ -307,6 +334,20 @@
                                     <OverflowToolbar>
                                         <Title text="Line Items" />
                                         <ToolbarSpacer />
+                                        <u:FileUploader 
+                                            id="uploadTaxExcel"
+                                            buttonOnly="true" 
+                                            iconOnly="true"
+                                            icon="sap-icon://upload"
+                                            tooltip="Upload Excel File"
+                                            change=".onExcelUpload"
+                                            fileType="xlsx"
+                                        />
+                                        <Button
+                                            icon="sap-icon://download"
+                                            text="Excel"
+                                            press=".onExcelDownload"
+                                        />
                                         <Button
                                             icon="sap-icon://add"
                                             text="Add Row"
@@ -434,7 +475,7 @@
             <uxap:ObjectPageSection
                 id="idCashSecTab"
                 titleUppercase="false"
-                title="Tax Invoice - Particulars"
+                title="Cash Bill - Particulars"
             >
                 <uxap:subSections>
                     <uxap:ObjectPageSubSection
@@ -454,6 +495,20 @@
                                     <OverflowToolbar>
                                         <Title text="Line Items" />
                                         <ToolbarSpacer />
+                                        <u:FileUploader 
+                                            id="uploadCashExcel"
+                                            buttonOnly="true" 
+                                            iconOnly="true"
+                                            icon="sap-icon://upload"
+                                            tooltip="Upload Excel File"
+                                            change=".onExcelUpload"
+                                            fileType="xlsx"
+                                        />
+                                        <Button
+                                            icon="sap-icon://download"
+                                            text="Excel"
+                                            press=".onExcelDownload"
+                                        />
                                         <Button
                                             icon="sap-icon://add"
                                             text="Add Row"
@@ -489,11 +544,16 @@
                                                 width="40rem"
                                             />
                                             <Input value="{cashQuantity}" />
-                                            <Input value="{cashAmount}" />
+                                            <Input value="{cashAmount}" change=".onCashCalc" />
                                         </cells>
                                     </ColumnListItem>
                                 </items>
                             </Table>
+                            <OverflowToolbar>
+                                <ToolbarSpacer />
+                                <Title text="Grand Total:" />
+                                <Title text="{/cashTotalSum}" />
+                            </OverflowToolbar>
                         </VBox>
                     </uxap:ObjectPageSubSection>
                 </uxap:subSections>
@@ -516,6 +576,16 @@
                     press="onClearLocalStorage"
                 />
                 <ToolbarSpacer />
+                
+                <Button 
+                    id="idBtnWordExport"
+                    icon="sap-icon://document"
+                    text="Export MS Word"
+                    type="Accept"
+                    press=".onExportToMSWord"
+                    visible="false"
+                />
+                
                 <Button
                     id="idBtnQuotation"
                     icon="sap-icon://pdf-attachment"
@@ -541,17 +611,16 @@
                 <CheckBox
                     id="chkTotal"
                     text="Total + GST"
-                    select="onTotalSelect"
+                    select="onCalc"
                 />
                 <CheckBox
                     id="chkGST"
                     text="GST Amount"
-                    select="onGSTSelect"
+                    select="onCalc"
                 />
                 <CheckBox
                     id="chkBankDetail"
                     text="Bank Details"
-                    select="onGSTSelect"
                 />
             </OverflowToolbar>
         </uxap:footer>
