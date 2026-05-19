@@ -49,6 +49,7 @@ export default class View extends Controller {
                     To: "",
                     Date: "",
                     Subject: "",
+                    AddtionalInfo: "",
                     Notes: "",
                     TermsAndConditions: "",
                     BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
@@ -268,7 +269,7 @@ export default class View extends Controller {
 
         aProducts.forEach((oProduct: any) => {
             // 1. Calculate individual row total
-            const fQty = parseFloat(oProduct.quantity)|| 0;
+            const fQty = parseFloat(oProduct.quantity) || 0;
             const fPrice = parseFloat(oProduct.price) || 0;
 
             let fRowTotal = 0;
@@ -276,7 +277,7 @@ export default class View extends Controller {
             // fRowTotal = fPrice;
             // }
             // else if (typeof fQty === "number") {
-                fRowTotal = fQty * fPrice;
+            fRowTotal = fQty * fPrice;
             // }
 
             // Update the row total in the model
@@ -381,7 +382,13 @@ export default class View extends Controller {
 
 
             doc.setFont("helvetica", "bold");
+            let finalHeaderY = 70;
             doc.text("Sub: " + oHeader.Subject, 14, 70);
+            doc.setFont("helvetica", "normal");
+            if (oHeader.AddtionalInfo !== "") {
+                doc.text(oHeader.AddtionalInfo, 14, finalHeaderY + 4);
+            }
+
 
             //TABLE SECTION
             const bShowGST = (this.getView()?.byId("chkGST") as CheckBox).getSelected();
@@ -459,7 +466,7 @@ export default class View extends Controller {
 
             // 4. Generate the Table
             (doc as any).autoTable({
-                startY: 72,
+                startY: finalHeaderY + 2,
                 head: [['Sl.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']],
                 body: tableBody,
                 theme: 'grid',
@@ -505,14 +512,14 @@ export default class View extends Controller {
             // }
 
             // Terms & Conditions ---
-            finalY = finalY + 10;
-            doc.setFontSize(9);
-            doc.setFont("helvetica", "bold");
-            doc.text("Terms & Conditions:", 14, finalY);
-            doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 4);
-
-
+            if (oHeader.TermsAndConditions !== "") {
+                finalY = finalY + 10;
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "bold");
+                doc.text("Terms & Conditions:", 14, finalY);
+                doc.setFont("helvetica", "normal");
+                doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 4);
+            }
 
 
             // Notes
@@ -691,7 +698,7 @@ export default class View extends Controller {
             index + 1,
             item.taxpProductName,
             item.taxHSNCode,
-            formatINR(item.taxPrice)+ item.taxSymbol,
+            formatINR(item.taxPrice) + item.taxSymbol,
             item.taxQuantity,
             formatINR(item.taxTotal)
         ]);

@@ -35,6 +35,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             To: "",
             Date: "",
             Subject: "",
+            AddtionalInfo: "",
             Notes: "",
             TermsAndConditions: "",
             BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
@@ -369,7 +370,12 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         doc.setFont("helvetica", "normal");
         doc.text(doc.splitTextToSize(oHeader.To, 80), 14, 50);
         doc.setFont("helvetica", "bold");
+        let finalHeaderY = 70;
         doc.text("Sub: " + oHeader.Subject, 14, 70);
+        doc.setFont("helvetica", "normal");
+        if (oHeader.AddtionalInfo !== "") {
+          doc.text(oHeader.AddtionalInfo, 14, finalHeaderY + 4);
+        }
 
         //TABLE SECTION
         const bShowGST = (this.getView()?.byId("chkGST")).getSelected();
@@ -446,7 +452,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
 
         // 4. Generate the Table
         doc.autoTable({
-          startY: 72,
+          startY: finalHeaderY + 2,
           head: [['Sl.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']],
           body: tableBody,
           theme: 'grid',
@@ -504,12 +510,14 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         // }
 
         // Terms & Conditions ---
-        finalY = finalY + 10;
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "bold");
-        doc.text("Terms & Conditions:", 14, finalY);
-        doc.setFont("helvetica", "normal");
-        doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 4);
+        if (oHeader.TermsAndConditions !== "") {
+          finalY = finalY + 10;
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "bold");
+          doc.text("Terms & Conditions:", 14, finalY);
+          doc.setFont("helvetica", "normal");
+          doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 4);
+        }
 
         // Notes
         if (oHeader.Notes !== "") {

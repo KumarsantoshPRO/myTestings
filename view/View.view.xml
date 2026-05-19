@@ -74,6 +74,13 @@
                                     growing="true"
                                     placeholder="e.g., Supply and Installment of camera"
                                 />
+                                <Label text="Addtional Info" />
+                                <TextArea
+                                    value="{/header/AddtionalInfo}"
+                                    rows="2"
+                                    growing="true"
+                                    placeholder="e.g., Sub line below subject"
+                                />
                             </f:content>
                         </f:SimpleForm>
                     </uxap:ObjectPageSubSection>
