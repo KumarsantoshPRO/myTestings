@@ -6,6 +6,9 @@ import CheckBox from "sap/m/CheckBox";
 import Select from "sap/m/Select";
 import Button from "sap/m/Button";
 import ObjectPageSection from "sap/uxap/ObjectPageSection";
+import Dialog from "sap/m/Dialog";
+import Input from "sap/m/Input";
+import Text from "sap/m/Text";
 
 declare var jspdf: any;
 declare var XLSX: any; // External SheetJS Library Reference
@@ -24,6 +27,11 @@ export default class View extends Controller {
     private sSignaturBase64: string = "";
     private sStorageKey: string = "my_billing_app_draft_data";
     private sSequenceKey: string = "my_billing_app_invoice_seq_counter";
+
+    // Storage Keys for Custom Template Tracking
+    private sCustomNumKey: string = "my_billing_app_custom_numeric_seq";
+    private sCustomSuffixKey: string = "my_billing_app_custom_suffix_format";
+    private sCustomTriggerFlag: string = "my_billing_app_use_custom_start_flag";
 
     public onInit(): void {
         let oData: any;
@@ -86,8 +94,17 @@ export default class View extends Controller {
         this._loadLocalLogo("img/logo.jpg");
         this._loadSignature("img/Signature.jpg");
 
-        // Setup original visibility views state 
+        // Setup original visibility views state
         this._updateSectionVisibilities("Quotation");
+    }
+
+    private _getDefaultFYLabel(): string {
+        const oToday = new Date();
+        const iCurrentMonth = oToday.getMonth(); 
+        const iCurrentYear = oToday.getFullYear();
+        let iStartFY = iCurrentMonth >= 3 ? iCurrentYear : iCurrentYear - 1;
+        let iEndFY = iStartFY + 1;
+        return `${iStartFY.toString().substring(2)}-${iEndFY.toString().substring(2)}`;
     }
 
     private _getFirstLineName(sAddress: string): string {
@@ -99,50 +116,91 @@ export default class View extends Controller {
 
     public onGenerateNextInvoiceNumber(): void {
         const oModel = this.getView()?.getModel() as JSONModel;
+        
+        let iNextSequence: number;
+        let sSuffixFormat: string;
 
-        // 1. Determine Current Indian Financial Year (Changes on April 1st)
-        const oToday = new Date();
-        const iCurrentMonth = oToday.getMonth(); // 0 = January, 3 = April
-        const iCurrentYear = oToday.getFullYear();
+        const sIsCustomTriggerActive = localStorage.getItem(this.sCustomTriggerFlag);
 
-        let iStartFY: number;
-        let iEndFY: number;
-
-        if (iCurrentMonth >= 3) { // April to December
-            iStartFY = iCurrentYear;
-            iEndFY = iCurrentYear + 1;
-        } else { // January to March
-            iStartFY = iCurrentYear - 1;
-            iEndFY = iCurrentYear;
+        if (sIsCustomTriggerActive === "X") {
+            iNextSequence = parseInt(localStorage.getItem(this.sCustomNumKey) || "1");
+            sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
+            localStorage.removeItem(this.sCustomTriggerFlag);
+        } else {
+            let iLastSequence = parseInt(localStorage.getItem(this.sCustomNumKey) || "0");
+            iNextSequence = iLastSequence + 1;
+            sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
         }
 
-        // Format years into "26-27" format
-        const sStartFYString = iStartFY.toString().substring(2);
-        const sEndFYString = iEndFY.toString().substring(2);
-        const sFinancialYearLabel = `${sStartFYString}-${sEndFYString}`; // e.g., "26-27"
+        localStorage.setItem(this.sCustomNumKey, iNextSequence.toString());
 
-        // 2. Setup a unique sequence counter storage key for this specific FY
-        const sFYSpecificStorageKey = `my_billing_app_sequence_${sFinancialYearLabel}`;
-
-        // 3. Get current sequence value or default to 0 if it's a new Financial Year
-        let iLastSequence = parseInt(localStorage.getItem(sFYSpecificStorageKey) || "0");
-        let iNextSequence = iLastSequence + 1;
-
-        // Save updated sequence back to storage
-        localStorage.setItem(sFYSpecificStorageKey, iNextSequence.toString());
-
-        // 4. Pad single-digit invoice sequences with a leading zero (e.g., 1 -> "01", 10 -> "10")
         const sPaddedSequence = iNextSequence < 10 ? `0${iNextSequence}` : `${iNextSequence}`;
+        const sFinalInvoiceNo = `${sPaddedSequence}${sSuffixFormat}`;
 
-        // 5. Construct final string: e.g., "09/26-27" or "100/26-27"
-        const sNewInvoiceNo = `${sPaddedSequence}/${sFinancialYearLabel}`;
-
-        // Update UI layout bindings
-        oModel.setProperty("/taxHeader/InvoiceNo", sNewInvoiceNo);
-
-        MessageToast.show(`Sequence generated for FY ${sFinancialYearLabel}!`);
+        oModel.setProperty("/taxHeader/InvoiceNo", sFinalInvoiceNo);
+        MessageToast.show(`Invoice generated successfully: ${sFinalInvoiceNo}`);
     }
 
+    public onSetGlobalInvoiceSequence(): void {
+        const oModel = this.getView()?.getModel() as JSONModel;
+
+        // Create an input control dynamically
+        const oInput = new Input({
+            placeholder: "e.g., 99/26-27",
+            width: "100%"
+        });
+
+        // Construct standard dialog container with an integrated text input field
+        const oDialog = new Dialog({
+            title: "Set Global Invoice Sequence Start Template",
+            type: "Message",
+            content: [
+                new Text({ text: "Enter the custom starting sequence template matching your format (e.g., 99/26-27):" }),
+                oInput
+            ],
+            beginButton: new Button({
+                text: "OK",
+                press: () => {
+                    const sRawInput = oInput.getValue() ? oInput.getValue().trim() : "";
+                    if (!sRawInput) {
+                        MessageBox.error("Invalid entry. Input field cannot be empty.");
+                        return;
+                    }
+
+                    const aParts = sRawInput.split("/");
+                    const sNumericPart = aParts[0].trim();
+                    const iNewSequenceValue = parseInt(sNumericPart);
+
+                    if (isNaN(iNewSequenceValue) || iNewSequenceValue < 0) {
+                        MessageBox.error("Invalid template number sequence. Ensure it begins with a valid whole number.");
+                        return;
+                    }
+
+                    const sExtractedSuffix = aParts.length > 1 ? `/${aParts.slice(1).join("/")}` : `/${this._getDefaultFYLabel()}`;
+
+                    localStorage.setItem(this.sCustomNumKey, iNewSequenceValue.toString());
+                    localStorage.setItem(this.sCustomSuffixKey, sExtractedSuffix);
+                    localStorage.setItem(this.sCustomTriggerFlag, "X");
+
+                    oModel.setProperty("/taxHeader/InvoiceNo", "");
+                    MessageToast.show(`Next Invoice Number sequence configured to begin exactly at: ${sRawInput}`);
+                    
+                    oDialog.close();
+                }
+            }),
+            endButton: new Button({
+                text: "Cancel",
+                press: () => {
+                    oDialog.close();
+                }
+            }),
+            afterClose: () => {
+                oDialog.destroy();
+            }
+        });
+
+        oDialog.open();
+    }
 
     public onSaveLocalStorage(): void {
         const oModel = this.getView()?.getModel() as JSONModel;
@@ -589,7 +647,6 @@ export default class View extends Controller {
         doc.save(sTargetFilename);
     }
 
-    // --- Core Dynamic Excel Processing Handling ---
     public onExcelDownload(oEvent: any): void {
         const sSelectMode = (this.getView()?.byId("mySelect") as Select).getSelectedItem()?.getText();
         const oModel = this.getView()?.getModel() as JSONModel;
@@ -682,14 +739,12 @@ export default class View extends Controller {
         reader.readAsArrayBuffer(oFile);
     }
 
-    // --- MS Word native container engine logic handler implementation ---
     public onExportToMSWord(): void {
         const sSelectMode = (this.getView()?.byId("mySelect") as Select).getSelectedItem()?.getText();
         const oModel = this.getView()?.getModel() as JSONModel;
         let sHtmlContent = "";
         let sFileName = "Export.doc";
 
-        // Common CSS Styles shared across all profiles to mimic the PDF design look
         const sStyleHeader = `
         <style>
             body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #000000; font-size: 10pt; line-height: 1.4; }
@@ -714,7 +769,6 @@ export default class View extends Controller {
         </style>
     `;
 
-        // 1. Business Letterhead Layout Template Fragment (Matches your PDF Header exactly)
         const sLetterheadHtml = `
         <table class="letterhead-table" cellspacing="0" cellpadding="0">
             <tr>
@@ -741,7 +795,7 @@ export default class View extends Controller {
             ${sStyleHeader}
             ${sLetterheadHtml}
             <div class="doc-title">QUOTATION</div>
-            
+           
             <table class="metadata-table" cellspacing="0" cellpadding="3">
                 <tr>
                     <td class="metadata-label">To,</td>
@@ -778,7 +832,7 @@ export default class View extends Controller {
                             <td class="text-right">${formatINR(item.total)}</td>
                         </tr>
                     `).join('')}
-                    
+                   
                     <tr>
                         <td colspan="4" class="total-row-label">18% GST Amount</td>
                         <td class="total-row-value">${formatINR(oModel.getProperty("/gst"))}</td>
@@ -792,7 +846,7 @@ export default class View extends Controller {
 
             ${oHeader.TermsAndConditions ? `<div class="section-heading">Terms & Conditions:</div><div class="footer-notes">${oHeader.TermsAndConditions.replace(/\n/g, '<br>')}</div>` : ''}
             ${oHeader.Notes ? `<div class="section-heading">Notes:</div><div class="footer-notes">${oHeader.Notes.replace(/\n/g, '<br>')}</div>` : ''}
-            
+           
             <div class="section-heading">Bank Details:</div>
             <div class="footer-notes">${oHeader.BankDetails.replace(/\n/g, '<br>')}</div>
 
@@ -811,7 +865,7 @@ export default class View extends Controller {
             ${sStyleHeader}
             ${sLetterheadHtml}
             <div class="doc-title">TAX INVOICE</div>
-            
+           
             <table class="metadata-table" cellspacing="0" cellpadding="3">
                 <tr>
                     <td class="metadata-label">To,</td>
@@ -863,7 +917,7 @@ export default class View extends Controller {
                             <td class="text-right">${formatINR(item.taxTotal)}</td>
                         </tr>
                     `).join('')}
-                    
+                   
                     <tr>
                         <td colspan="5" class="total-row-label">TOTAL:</td>
                         <td class="total-row-value">${formatINR(oModel.getProperty("/taxtotal"))}</td>
@@ -904,7 +958,7 @@ export default class View extends Controller {
             ${sStyleHeader}
             ${sLetterheadHtml}
             <div class="doc-title">CASH BILL</div>
-            
+           
             <table class="metadata-table" cellspacing="0" cellpadding="3">
                 <tr>
                     <td class="metadata-label">To,</td>
@@ -936,7 +990,7 @@ export default class View extends Controller {
                             <td class="text-right">${formatINR(item.cashAmount)}</td>
                         </tr>
                     `).join('')}
-                    
+                   
                     <tr>
                         <td colspan="3" class="total-row-label" style="font-size:10.5pt;">GRAND TOTAL:</td>
                         <td class="total-row-value" style="font-size:10.5pt;">${formatINR(oModel.getProperty("/cashTotalSum"))}</td>
@@ -957,10 +1011,9 @@ export default class View extends Controller {
         `;
         }
 
-        // Wrap with the specific MS Word XML structure namespaces so Word handles the styling accurately
         const sFullBlobTemplate = `
-        <html xmlns:o='urn:schemas-microsoft-com:office:office' 
-              xmlns:w='urn:schemas-microsoft-com:office:word' 
+        <html xmlns:o='urn:schemas-microsoft-com:office:office'
+              xmlns:w='urn:schemas-microsoft-com:office:word'
               xmlns='http://www.w3.org/TR/REC-html40'>
         <head>
             </head>

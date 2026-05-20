@@ -154,7 +154,7 @@
                                     value="{/taxHeader/GSTNo}"
                                     placeholder="Enter GST No"
                                 />
-                                
+
                                 <Label text="Invoice No" />
                                 <Input
                                     id="idTaxInvoiceNoInput"
@@ -162,15 +162,33 @@
                                     placeholder="Auto-generated sequence"
                                     editable="true"
                                 />
-                                
+
                                 <Label text="" />
-                                <Button 
-                                    icon="sap-icon://chain-link" 
-                                    text="Get Next Invoice No" 
+                                <!-- <HBox> -->
+                                <Button
+                                    icon="sap-icon://chain-link"
+                                    text="Get Invoice No"
                                     press=".onGenerateNextInvoiceNumber"
                                     type="Emphasized"
+                                    class="sapUiTinyMarginEnd"
                                 />
-                                
+                                <Button
+                                    icon="sap-icon://settings"
+                                    text="Set Invoice No"
+                                    press=".onSetGlobalInvoiceSequence"
+                                    type="Default"
+                                />
+                                <!-- </HBox> -->
+
+                                <Label text="" />
+                                <Button
+                                    icon="sap-icon://chain-link"
+                                    text="Get Next Invoice No"
+                                    press=".onGenerateNextInvoiceNumber"
+                                    type="Emphasized"
+                                    visible="false"
+                                />
+
                                 <Label text="Date" />
                                 <DatePicker
                                     value="{/taxHeader/Date}"
@@ -228,9 +246,9 @@
                                     <OverflowToolbar>
                                         <Title text="Line Items" />
                                         <ToolbarSpacer />
-                                        <u:FileUploader 
+                                        <u:FileUploader
                                             id="uploadQuotationExcel"
-                                            buttonOnly="true" 
+                                            buttonOnly="true"
                                             iconOnly="true"
                                             icon="sap-icon://upload"
                                             tooltip="Upload Excel File"
@@ -239,8 +257,9 @@
                                         />
                                         <Button
                                             icon="sap-icon://download"
-                                            text="Excel"
+                                            text="Download Excel"
                                             press=".onExcelDownload"
+                                            type="Neutral"
                                         />
                                         <Button
                                             icon="sap-icon://add"
@@ -334,9 +353,9 @@
                                     <OverflowToolbar>
                                         <Title text="Line Items" />
                                         <ToolbarSpacer />
-                                        <u:FileUploader 
+                                        <u:FileUploader
                                             id="uploadTaxExcel"
-                                            buttonOnly="true" 
+                                            buttonOnly="true"
                                             iconOnly="true"
                                             icon="sap-icon://upload"
                                             tooltip="Upload Excel File"
@@ -495,9 +514,9 @@
                                     <OverflowToolbar>
                                         <Title text="Line Items" />
                                         <ToolbarSpacer />
-                                        <u:FileUploader 
+                                        <u:FileUploader
                                             id="uploadCashExcel"
-                                            buttonOnly="true" 
+                                            buttonOnly="true"
                                             iconOnly="true"
                                             icon="sap-icon://upload"
                                             tooltip="Upload Excel File"
@@ -544,7 +563,10 @@
                                                 width="40rem"
                                             />
                                             <Input value="{cashQuantity}" />
-                                            <Input value="{cashAmount}" change=".onCashCalc" />
+                                            <Input
+                                                value="{cashAmount}"
+                                                change=".onCashCalc"
+                                            />
                                         </cells>
                                     </ColumnListItem>
                                 </items>
@@ -576,8 +598,8 @@
                     press="onClearLocalStorage"
                 />
                 <ToolbarSpacer />
-                
-                <Button 
+
+                <Button
                     id="idBtnWordExport"
                     icon="sap-icon://document"
                     text="Export MS Word"
@@ -585,7 +607,7 @@
                     press=".onExportToMSWord"
                     visible="false"
                 />
-                
+
                 <Button
                     id="idBtnQuotation"
                     icon="sap-icon://pdf-attachment"

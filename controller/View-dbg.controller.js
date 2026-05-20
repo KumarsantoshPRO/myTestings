@@ -1,4 +1,4 @@
-sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap/m/MessageBox", "sap/m/MessageToast"], function (Controller, JSONModel, MessageBox, MessageToast) {
+sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap/m/MessageBox", "sap/m/MessageToast", "sap/m/Button", "sap/m/Dialog", "sap/m/Input", "sap/m/Text"], function (Controller, JSONModel, MessageBox, MessageToast, Button, Dialog, Input, Text) {
   "use strict";
 
   // External SheetJS Library Reference
@@ -18,6 +18,10 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       this.sSignaturBase64 = "";
       this.sStorageKey = "my_billing_app_draft_data";
       this.sSequenceKey = "my_billing_app_invoice_seq_counter";
+      // Storage Keys for Custom Template Tracking
+      this.sCustomNumKey = "my_billing_app_custom_numeric_seq";
+      this.sCustomSuffixKey = "my_billing_app_custom_suffix_format";
+      this.sCustomTriggerFlag = "my_billing_app_use_custom_start_flag";
     },
     onInit: function _onInit() {
       let oData;
@@ -88,8 +92,16 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       this._loadLocalLogo("img/logo.jpg");
       this._loadSignature("img/Signature.jpg");
 
-      // Setup original visibility views state 
+      // Setup original visibility views state
       this._updateSectionVisibilities("Quotation");
+    },
+    _getDefaultFYLabel: function _getDefaultFYLabel() {
+      const oToday = new Date();
+      const iCurrentMonth = oToday.getMonth();
+      const iCurrentYear = oToday.getFullYear();
+      let iStartFY = iCurrentMonth >= 3 ? iCurrentYear : iCurrentYear - 1;
+      let iEndFY = iStartFY + 1;
+      return `${iStartFY.toString().substring(2)}-${iEndFY.toString().substring(2)}`;
     },
     _getFirstLineName: function _getFirstLineName(sAddress) {
       if (!sAddress || sAddress.trim() === "") {
@@ -99,47 +111,75 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
     },
     onGenerateNextInvoiceNumber: function _onGenerateNextInvoiceNumber() {
       const oModel = this.getView()?.getModel();
-
-      // 1. Determine Current Indian Financial Year (Changes on April 1st)
-      const oToday = new Date();
-      const iCurrentMonth = oToday.getMonth(); // 0 = January, 3 = April
-      const iCurrentYear = oToday.getFullYear();
-      let iStartFY;
-      let iEndFY;
-      if (iCurrentMonth >= 3) {
-        // April to December
-        iStartFY = iCurrentYear;
-        iEndFY = iCurrentYear + 1;
+      let iNextSequence;
+      let sSuffixFormat;
+      const sIsCustomTriggerActive = localStorage.getItem(this.sCustomTriggerFlag);
+      if (sIsCustomTriggerActive === "X") {
+        iNextSequence = parseInt(localStorage.getItem(this.sCustomNumKey) || "1");
+        sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
+        localStorage.removeItem(this.sCustomTriggerFlag);
       } else {
-        // January to March
-        iStartFY = iCurrentYear - 1;
-        iEndFY = iCurrentYear;
+        let iLastSequence = parseInt(localStorage.getItem(this.sCustomNumKey) || "0");
+        iNextSequence = iLastSequence + 1;
+        sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
       }
-
-      // Format years into "26-27" format
-      const sStartFYString = iStartFY.toString().substring(2);
-      const sEndFYString = iEndFY.toString().substring(2);
-      const sFinancialYearLabel = `${sStartFYString}-${sEndFYString}`; // e.g., "26-27"
-
-      // 2. Setup a unique sequence counter storage key for this specific FY
-      const sFYSpecificStorageKey = `my_billing_app_sequence_${sFinancialYearLabel}`;
-
-      // 3. Get current sequence value or default to 0 if it's a new Financial Year
-      let iLastSequence = parseInt(localStorage.getItem(sFYSpecificStorageKey) || "0");
-      let iNextSequence = iLastSequence + 1;
-
-      // Save updated sequence back to storage
-      localStorage.setItem(sFYSpecificStorageKey, iNextSequence.toString());
-
-      // 4. Pad single-digit invoice sequences with a leading zero (e.g., 1 -> "01", 10 -> "10")
+      localStorage.setItem(this.sCustomNumKey, iNextSequence.toString());
       const sPaddedSequence = iNextSequence < 10 ? `0${iNextSequence}` : `${iNextSequence}`;
+      const sFinalInvoiceNo = `${sPaddedSequence}${sSuffixFormat}`;
+      oModel.setProperty("/taxHeader/InvoiceNo", sFinalInvoiceNo);
+      MessageToast.show(`Invoice generated successfully: ${sFinalInvoiceNo}`);
+    },
+    onSetGlobalInvoiceSequence: function _onSetGlobalInvoiceSequence() {
+      const oModel = this.getView()?.getModel();
 
-      // 5. Construct final string: e.g., "09/26-27" or "100/26-27"
-      const sNewInvoiceNo = `${sPaddedSequence}/${sFinancialYearLabel}`;
+      // Create an input control dynamically
+      const oInput = new Input({
+        placeholder: "e.g., 99/26-27",
+        width: "100%"
+      });
 
-      // Update UI layout bindings
-      oModel.setProperty("/taxHeader/InvoiceNo", sNewInvoiceNo);
-      MessageToast.show(`Sequence generated for FY ${sFinancialYearLabel}!`);
+      // Construct standard dialog container with an integrated text input field
+      const oDialog = new Dialog({
+        title: "Set Global Invoice Sequence Start Template",
+        type: "Message",
+        content: [new Text({
+          text: "Enter the custom starting sequence template matching your format (e.g., 99/26-27):"
+        }), oInput],
+        beginButton: new Button({
+          text: "OK",
+          press: () => {
+            const sRawInput = oInput.getValue() ? oInput.getValue().trim() : "";
+            if (!sRawInput) {
+              MessageBox.error("Invalid entry. Input field cannot be empty.");
+              return;
+            }
+            const aParts = sRawInput.split("/");
+            const sNumericPart = aParts[0].trim();
+            const iNewSequenceValue = parseInt(sNumericPart);
+            if (isNaN(iNewSequenceValue) || iNewSequenceValue < 0) {
+              MessageBox.error("Invalid template number sequence. Ensure it begins with a valid whole number.");
+              return;
+            }
+            const sExtractedSuffix = aParts.length > 1 ? `/${aParts.slice(1).join("/")}` : `/${this._getDefaultFYLabel()}`;
+            localStorage.setItem(this.sCustomNumKey, iNewSequenceValue.toString());
+            localStorage.setItem(this.sCustomSuffixKey, sExtractedSuffix);
+            localStorage.setItem(this.sCustomTriggerFlag, "X");
+            oModel.setProperty("/taxHeader/InvoiceNo", "");
+            MessageToast.show(`Next Invoice Number sequence configured to begin exactly at: ${sRawInput}`);
+            oDialog.close();
+          }
+        }),
+        endButton: new Button({
+          text: "Cancel",
+          press: () => {
+            oDialog.close();
+          }
+        }),
+        afterClose: () => {
+          oDialog.destroy();
+        }
+      });
+      oDialog.open();
     },
     onSaveLocalStorage: function _onSaveLocalStorage() {
       const oModel = this.getView()?.getModel();
@@ -751,7 +791,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       const sTargetFilename = this._getFirstLineName(oData.cashHeader.cashTo) + "_CashBill.pdf";
       doc.save(sTargetFilename);
     },
-    // --- Core Dynamic Excel Processing Handling ---
     onExcelDownload: function _onExcelDownload(oEvent) {
       const sSelectMode = (this.getView()?.byId("mySelect")).getSelectedItem()?.getText();
       const oModel = this.getView()?.getModel();
@@ -839,14 +878,11 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       };
       reader.readAsArrayBuffer(oFile);
     },
-    // --- MS Word native container engine logic handler implementation ---
     onExportToMSWord: function _onExportToMSWord() {
       const sSelectMode = (this.getView()?.byId("mySelect")).getSelectedItem()?.getText();
       const oModel = this.getView()?.getModel();
       let sHtmlContent = "";
       let sFileName = "Export.doc";
-
-      // Common CSS Styles shared across all profiles to mimic the PDF design look
       const sStyleHeader = `
         <style>
             body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #000000; font-size: 10pt; line-height: 1.4; }
@@ -870,8 +906,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             .signature-space { margin-top: 50px; text-align: right; font-weight: bold; font-size: 10pt; }
         </style>
     `;
-
-      // 1. Business Letterhead Layout Template Fragment (Matches your PDF Header exactly)
       const sLetterheadHtml = `
         <table class="letterhead-table" cellspacing="0" cellpadding="0">
             <tr>
@@ -896,7 +930,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             ${sStyleHeader}
             ${sLetterheadHtml}
             <div class="doc-title">QUOTATION</div>
-            
+           
             <table class="metadata-table" cellspacing="0" cellpadding="3">
                 <tr>
                     <td class="metadata-label">To,</td>
@@ -933,7 +967,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
                             <td class="text-right">${formatINR(item.total)}</td>
                         </tr>
                     `).join('')}
-                    
+                   
                     <tr>
                         <td colspan="4" class="total-row-label">18% GST Amount</td>
                         <td class="total-row-value">${formatINR(oModel.getProperty("/gst"))}</td>
@@ -947,7 +981,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
 
             ${oHeader.TermsAndConditions ? `<div class="section-heading">Terms & Conditions:</div><div class="footer-notes">${oHeader.TermsAndConditions.replace(/\n/g, '<br>')}</div>` : ''}
             ${oHeader.Notes ? `<div class="section-heading">Notes:</div><div class="footer-notes">${oHeader.Notes.replace(/\n/g, '<br>')}</div>` : ''}
-            
+           
             <div class="section-heading">Bank Details:</div>
             <div class="footer-notes">${oHeader.BankDetails.replace(/\n/g, '<br>')}</div>
 
@@ -964,7 +998,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             ${sStyleHeader}
             ${sLetterheadHtml}
             <div class="doc-title">TAX INVOICE</div>
-            
+           
             <table class="metadata-table" cellspacing="0" cellpadding="3">
                 <tr>
                     <td class="metadata-label">To,</td>
@@ -1016,7 +1050,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
                             <td class="text-right">${formatINR(item.taxTotal)}</td>
                         </tr>
                     `).join('')}
-                    
+                   
                     <tr>
                         <td colspan="5" class="total-row-label">TOTAL:</td>
                         <td class="total-row-value">${formatINR(oModel.getProperty("/taxtotal"))}</td>
@@ -1055,7 +1089,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             ${sStyleHeader}
             ${sLetterheadHtml}
             <div class="doc-title">CASH BILL</div>
-            
+           
             <table class="metadata-table" cellspacing="0" cellpadding="3">
                 <tr>
                     <td class="metadata-label">To,</td>
@@ -1087,7 +1121,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
                             <td class="text-right">${formatINR(item.cashAmount)}</td>
                         </tr>
                     `).join('')}
-                    
+                   
                     <tr>
                         <td colspan="3" class="total-row-label" style="font-size:10.5pt;">GRAND TOTAL:</td>
                         <td class="total-row-value" style="font-size:10.5pt;">${formatINR(oModel.getProperty("/cashTotalSum"))}</td>
@@ -1107,11 +1141,9 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             </div>
         `;
       }
-
-      // Wrap with the specific MS Word XML structure namespaces so Word handles the styling accurately
       const sFullBlobTemplate = `
-        <html xmlns:o='urn:schemas-microsoft-com:office:office' 
-              xmlns:w='urn:schemas-microsoft-com:office:word' 
+        <html xmlns:o='urn:schemas-microsoft-com:office:office'
+              xmlns:w='urn:schemas-microsoft-com:office:word'
               xmlns='http://www.w3.org/TR/REC-html40'>
         <head>
             </head>
