@@ -9,6 +9,12 @@ import ObjectPageSection from "sap/uxap/ObjectPageSection";
 import Dialog from "sap/m/Dialog";
 import Input from "sap/m/Input";
 import Text from "sap/m/Text";
+import Fragment from "sap/ui/core/Fragment";
+import TableSelectDialog, { TableSelectDialog$ConfirmEvent, TableSelectDialog$SearchEvent } from "sap/m/TableSelectDialog";
+import Filter from "sap/ui/model/Filter";
+import FilterOperator from "sap/ui/model/FilterOperator";
+import ListBinding from "sap/ui/model/ListBinding";
+import ColumnListItem from "sap/m/ColumnListItem";
 
 declare var jspdf: any;
 declare var XLSX: any; // External SheetJS Library Reference
@@ -23,6 +29,7 @@ const formatINR = (amount: number | string): string => {
 };
 
 export default class View extends Controller {
+    private _pDialog: Promise<TableSelectDialog> | null = null;
     private sLogoBase64: string = "";
     private sSignaturBase64: string = "";
     private sStorageKey: string = "my_billing_app_draft_data";
@@ -100,7 +107,7 @@ export default class View extends Controller {
 
     private _getDefaultFYLabel(): string {
         const oToday = new Date();
-        const iCurrentMonth = oToday.getMonth(); 
+        const iCurrentMonth = oToday.getMonth();
         const iCurrentYear = oToday.getFullYear();
         let iStartFY = iCurrentMonth >= 3 ? iCurrentYear : iCurrentYear - 1;
         let iEndFY = iStartFY + 1;
@@ -116,7 +123,7 @@ export default class View extends Controller {
 
     public onGenerateNextInvoiceNumber(): void {
         const oModel = this.getView()?.getModel() as JSONModel;
-        
+
         let iNextSequence: number;
         let sSuffixFormat: string;
 
@@ -184,7 +191,7 @@ export default class View extends Controller {
 
                     oModel.setProperty("/taxHeader/InvoiceNo", "");
                     MessageToast.show(`Next Invoice Number sequence configured to begin exactly at: ${sRawInput}`);
-                    
+
                     oDialog.close();
                 }
             }),
@@ -285,9 +292,9 @@ export default class View extends Controller {
     }
 
     public onDelete(oEvent: any): void {
-        const oItemToDelete = oEvent.getParameter("listItem");
-        const sPath = oItemToDelete.getBindingContext().getPath();
-        const iIndex = parseInt(sPath.split("/").pop());
+        const oItemToDelete = oEvent.getParameter("listItem") as ColumnListItem;
+        const sPath = oItemToDelete.getBindingContext()!.getPath();
+        const iIndex = parseInt(sPath.split("/").pop()!);
         const oModel = this.getView()?.getModel() as JSONModel;
         const aProducts = oModel.getProperty("/products");
         aProducts.splice(iIndex, 1);
@@ -412,6 +419,9 @@ export default class View extends Controller {
 
         const sTargetFilename = this._getFirstLineName(oHeader.To) + "_Quotation.pdf";
         doc.save(sTargetFilename);
+
+        // Also trigger the matching Excel download
+        this.onExcelDownload(null, "Quotation");
     }
 
     public onTaxAddRow(): void {
@@ -422,9 +432,9 @@ export default class View extends Controller {
     }
 
     public onTaxDelete(oEvent: any): void {
-        const oItemToDelete = oEvent.getParameter("listItem");
-        const sPath = oItemToDelete.getBindingContext().getPath();
-        const iIndex = parseInt(sPath.split("/").pop());
+        const oItemToDelete = oEvent.getParameter("listItem") as ColumnListItem;
+        const sPath = oItemToDelete.getBindingContext()!.getPath();
+        const iIndex = parseInt(sPath.split("/").pop()!);
         const oModel = this.getView()?.getModel() as JSONModel;
         const aProducts = oModel.getProperty("/taxProducts");
         aProducts.splice(iIndex, 1);
@@ -544,6 +554,9 @@ export default class View extends Controller {
 
         const sTargetFilename = this._getFirstLineName(oData.taxHeader.To) + "_TaxInvoice.pdf";
         doc.save(sTargetFilename);
+
+        // Also trigger the matching Excel download
+        this.onExcelDownload(null, "TAX-INVOICE");
     }
 
     public onCashAddRow(): void {
@@ -554,9 +567,9 @@ export default class View extends Controller {
     }
 
     public onCashDelete(oEvent: any): void {
-        const oItemToDelete = oEvent.getParameter("listItem");
-        const sPath = oItemToDelete.getBindingContext().getPath();
-        const iIndex = parseInt(sPath.split("/").pop());
+        const oItemToDelete = oEvent.getParameter("listItem") as ColumnListItem;
+        const sPath = oItemToDelete.getBindingContext()!.getPath();
+        const iIndex = parseInt(sPath.split("/").pop()!);
         const oModel = this.getView()?.getModel() as JSONModel;
         const aProducts = oModel.getProperty("/cashProducts");
         aProducts.splice(iIndex, 1);
@@ -645,17 +658,34 @@ export default class View extends Controller {
 
         const sTargetFilename = this._getFirstLineName(oData.cashHeader.cashTo) + "_CashBill.pdf";
         doc.save(sTargetFilename);
+
+        // Also trigger the matching Excel download
+        this.onExcelDownload(null, "Cash Bill");
     }
 
-    public onExcelDownload(oEvent: any): void {
-        const sSelectMode = (this.getView()?.byId("mySelect") as Select).getSelectedItem()?.getText();
+    public onExcelDownload(oEvent: any, sOverrideMode?: string): void {
+        const sSelectMode = sOverrideMode || (this.getView()?.byId("mySelect") as Select).getSelectedItem()?.getText();
         const oModel = this.getView()?.getModel() as JSONModel;
-        let dataToExport: any[] = [];
         let sFileName = "Export.xlsx";
+        let headerData: any[] = [];
+        let itemsData: any[] = [];
+
+        // Add explicit Mode metadata row to help processing uploads safely
+        headerData.push({ "FIELD": "MODE_METADATA", "VALUE": sSelectMode });
 
         if (sSelectMode === "Quotation") {
             sFileName = this._getFirstLineName(oModel.getProperty("/header/To")) + "_QuotationItems.xlsx";
-            dataToExport = oModel.getProperty("/products").map((item: any) => ({
+
+            // Build key-value mapping rows for header parameters
+            headerData.push({ "FIELD": "Header_To", "VALUE": oModel.getProperty("/header/To") });
+            headerData.push({ "FIELD": "Header_Date", "VALUE": oModel.getProperty("/header/Date") });
+            headerData.push({ "FIELD": "Header_Subject", "VALUE": oModel.getProperty("/header/Subject") });
+            headerData.push({ "FIELD": "Header_AddtionalInfo", "VALUE": oModel.getProperty("/header/AddtionalInfo") });
+            headerData.push({ "FIELD": "Header_Notes", "VALUE": oModel.getProperty("/header/Notes") });
+            headerData.push({ "FIELD": "Header_TermsAndConditions", "VALUE": oModel.getProperty("/header/TermsAndConditions") });
+            headerData.push({ "FIELD": "Header_BankDetails", "VALUE": oModel.getProperty("/header/BankDetails") });
+
+            itemsData = oModel.getProperty("/products").map((item: any) => ({
                 "Particulars": item.productName,
                 "Rate": item.price,
                 "Quantity": item.quantity,
@@ -664,7 +694,17 @@ export default class View extends Controller {
             }));
         } else if (sSelectMode === "TAX-INVOICE") {
             sFileName = this._getFirstLineName(oModel.getProperty("/taxHeader/To")) + "_TaxInvoiceItems.xlsx";
-            dataToExport = oModel.getProperty("/taxProducts").map((item: any) => ({
+
+            headerData.push({ "FIELD": "TaxHeader_To", "VALUE": oModel.getProperty("/taxHeader/To") });
+            headerData.push({ "FIELD": "TaxHeader_GSTNo", "VALUE": oModel.getProperty("/taxHeader/GSTNo") });
+            headerData.push({ "FIELD": "TaxHeader_InvoiceNo", "VALUE": oModel.getProperty("/taxHeader/InvoiceNo") });
+            headerData.push({ "FIELD": "TaxHeader_Date", "VALUE": oModel.getProperty("/taxHeader/Date") });
+            headerData.push({ "FIELD": "TaxHeader_PONo", "VALUE": oModel.getProperty("/taxHeader/PONo") });
+            headerData.push({ "FIELD": "TaxHeader_PODate", "VALUE": oModel.getProperty("/taxHeader/PODate") });
+            headerData.push({ "FIELD": "TaxHeader_PartyGST", "VALUE": oModel.getProperty("/taxHeader/PartyGST") });
+            // headerData.push({ "FIELD": "TaxHeader_BankDetails", "VALUE": oModel.getProperty("/taxHeader/BankDetails") });
+
+            itemsData = oModel.getProperty("/taxProducts").map((item: any) => ({
                 "Particulars": item.taxpProductName,
                 "HSN Code": item.taxHSNCode,
                 "Rate": item.taxPrice,
@@ -674,14 +714,27 @@ export default class View extends Controller {
             }));
         } else {
             sFileName = this._getFirstLineName(oModel.getProperty("/cashHeader/cashTo")) + "_CashBillItems.xlsx";
-            dataToExport = oModel.getProperty("/cashProducts").map((item: any) => ({
+
+            headerData.push({ "FIELD": "CashHeader_cashTo", "VALUE": oModel.getProperty("/cashHeader/cashTo") });
+            headerData.push({ "FIELD": "CashHeader_cashDate", "VALUE": oModel.getProperty("/cashHeader/cashDate") });
+            headerData.push({ "FIELD": "CashHeader_cashbankDetails", "VALUE": oModel.getProperty("/cashHeader/cashbankDetails") });
+
+            itemsData = oModel.getProperty("/cashProducts").map((item: any) => ({
                 "Particulars": item.cashBody,
                 "Quantity": item.cashQuantity,
                 "Amount": item.cashAmount
             }));
         }
 
-        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        // Generate worksheet starting with the custom structural metadata configurations
+        const ws = XLSX.utils.json_to_sheet(headerData);
+
+        // Append an empty row for separation space layout
+        XLSX.utils.sheet_add_aoa(ws, [[]], { origin: -1 });
+
+        // Append the operational Line Items directly beneath the spacing layer
+        XLSX.utils.sheet_add_json(ws, itemsData, { origin: -1 });
+
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Items Data");
         XLSX.writeFile(wb, sFileName);
@@ -698,13 +751,54 @@ export default class View extends Controller {
             const workbook = XLSX.read(data, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
+            // Raw JSON translation captures structural definitions natively
+            const rawJsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[];
             const sSelectMode = (this.getView()?.byId("mySelect") as Select).getSelectedItem()?.getText();
             const oModel = this.getView()?.getModel() as JSONModel;
 
+            // Differentiate header map items from structural matrix lines
+            const headerMap: any = {};
+            let lineItemsStartIndex = 0;
+
+            for (let i = 0; i < rawJsonRows.length; i++) {
+                const row = rawJsonRows[i];
+                if (row && row[0] && typeof row[0] === 'string' && (row[0].includes("Header") || row[0] === "FIELD" || row[0] === "MODE_METADATA")) {
+                    if (row[0] !== "FIELD") {
+                        headerMap[row[0]] = row[1] || "";
+                    }
+                } else {
+                    // Blank row spacing found or data rows began
+                    lineItemsStartIndex = i;
+                    break;
+                }
+            }
+
+            // Slice out the remaining block data rows and convert using original object property mapping arrays
+            const lineItemsRows = rawJsonRows.slice(lineItemsStartIndex).filter(row => row && row.length > 0);
+            if (lineItemsRows.length === 0) return;
+
+            // Extract table headers dynamically from array configuration parameters
+            const tableHeaders = lineItemsRows[0];
+            const jsonDataItems = lineItemsRows.slice(1).map(row => {
+                const obj: any = {};
+                tableHeaders.forEach((headerName: string, index: number) => {
+                    obj[headerName] = row[index] !== undefined ? row[index] : "";
+                });
+                return obj;
+            });
+
             if (sSelectMode === "Quotation") {
-                const parsedProducts = jsonData.map((row: any) => ({
+                // Restore Header Properties safely back into JSON Model path mappings
+                if (headerMap["Header_To"]) oModel.setProperty("/header/To", headerMap["Header_To"]);
+                if (headerMap["Header_Date"]) oModel.setProperty("/header/Date", headerMap["Header_Date"]);
+                if (headerMap["Header_Subject"]) oModel.setProperty("/header/Subject", headerMap["Header_Subject"]);
+                if (headerMap["Header_AddtionalInfo"]) oModel.setProperty("/header/AddtionalInfo", headerMap["Header_AddtionalInfo"]);
+                if (headerMap["Header_Notes"]) oModel.setProperty("/header/Notes", headerMap["Header_Notes"]);
+                if (headerMap["Header_TermsAndConditions"]) oModel.setProperty("/header/TermsAndConditions", headerMap["Header_TermsAndConditions"]);
+                if (headerMap["Header_BankDetails"]) oModel.setProperty("/header/BankDetails", headerMap["Header_BankDetails"]);
+
+                const parsedProducts = jsonDataItems.map((row: any) => ({
                     productName: row["Particulars"] || "",
                     price: row["Rate"]?.toString() || "0.00",
                     quantity: parseInt(row["Quantity"]) || 1,
@@ -714,7 +808,16 @@ export default class View extends Controller {
                 oModel.setProperty("/products", parsedProducts);
                 this.onCalc();
             } else if (sSelectMode === "TAX-INVOICE") {
-                const parsedTax = jsonData.map((row: any) => ({
+                if (headerMap["TaxHeader_To"]) oModel.setProperty("/taxHeader/To", headerMap["TaxHeader_To"]);
+                if (headerMap["TaxHeader_GSTNo"]) oModel.setProperty("/taxHeader/GSTNo", headerMap["TaxHeader_GSTNo"]);
+                if (headerMap["TaxHeader_InvoiceNo"]) oModel.setProperty("/taxHeader/InvoiceNo", headerMap["TaxHeader_InvoiceNo"]);
+                if (headerMap["TaxHeader_Date"]) oModel.setProperty("/taxHeader/Date", headerMap["TaxHeader_Date"]);
+                if (headerMap["TaxHeader_PONo"]) oModel.setProperty("/taxHeader/PONo", headerMap["TaxHeader_PONo"]);
+                if (headerMap["TaxHeader_PODate"]) oModel.setProperty("/taxHeader/PODate", headerMap["TaxHeader_PODate"]);
+                if (headerMap["TaxHeader_PartyGST"]) oModel.setProperty("/taxHeader/PartyGST", headerMap["TaxHeader_PartyGST"]);
+                // if (headerMap["TaxHeader_BankDetails"]) oModel.setProperty ("/taxHeader/BankDetails", headerMap["TaxHeader_BankDetails"]);
+
+                const parsedTax = jsonDataItems.map((row: any) => ({
                     taxpProductName: row["Particulars"] || "",
                     taxHSNCode: row["HSN Code"]?.toString() || "",
                     taxQuantity: parseInt(row["Quantity"]) || 1,
@@ -725,7 +828,11 @@ export default class View extends Controller {
                 oModel.setProperty("/taxProducts", parsedTax);
                 this.onTaxCalc();
             } else {
-                const parsedCash = jsonData.map((row: any) => ({
+                if (headerMap["CashHeader_cashTo"]) oModel.setProperty("/cashHeader/cashTo", headerMap["CashHeader_cashTo"]);
+                if (headerMap["CashHeader_cashDate"]) oModel.setProperty("/cashHeader/cashDate", headerMap["CashHeader_cashDate"]);
+                if (headerMap["CashHeader_cashbankDetails"]) oModel.setProperty("/cashHeader/cashbankDetails", headerMap["CashHeader_cashbankDetails"]);
+
+                const parsedCash = jsonDataItems.map((row: any) => ({
                     cashBody: row["Particulars"] || "",
                     cashQuantity: row["Quantity"]?.toString() || "1",
                     cashAmount: row["Amount"]?.toString() || "0.00"
@@ -733,308 +840,13 @@ export default class View extends Controller {
                 oModel.setProperty("/cashProducts", parsedCash);
                 this.onCashCalc();
             }
-            MessageToast.show("Excel rows processed successfully!");
+            MessageToast.show("Excel headers and rows processed successfully!");
             oFileUploader.clear();
         };
         reader.readAsArrayBuffer(oFile);
     }
 
-    public onExportToMSWord(): void {
-        const sSelectMode = (this.getView()?.byId("mySelect") as Select).getSelectedItem()?.getText();
-        const oModel = this.getView()?.getModel() as JSONModel;
-        let sHtmlContent = "";
-        let sFileName = "Export.doc";
-
-        const sStyleHeader = `
-        <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #000000; font-size: 10pt; line-height: 1.4; }
-            .letterhead-table { width: 100%; border: none; margin-bottom: 20px; }
-            .company-title { font-size: 18pt; font-weight: bold; color: #000000; font-family: Arial, sans-serif; }
-            .company-details { font-size: 9.5pt; text-align: right; color: #333333; }
-            .divider { border-top: 1.5pt solid #000000; margin-top: 10px; margin-bottom: 20px; }
-            .doc-title { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; }
-            .metadata-table { width: 100%; border: none; margin-bottom: 25px; }
-            .metadata-label { font-weight: bold; width: 15%; vertical-align: top; font-size: 10pt; }
-            .metadata-value { width: 35%; vertical-align: top; font-size: 10pt; }
-            .items-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-            .items-table th { background-color: #FFFFFF; color: #000000; font-weight: bold; text-align: center; border: 0.5pt solid #000000; padding: 6px; font-size: 9.5pt; }
-            .items-table td { border: 0.5pt solid #000000; padding: 6px; font-size: 9.5pt; vertical-align: top; }
-            .text-center { text-align: center; }
-            .text-right { text-align: right; }
-            .total-row-label { font-weight: bold; text-align: right; border: 0.5pt solid #000000 !important; }
-            .total-row-value { font-weight: bold; text-align: right; border: 0.5pt solid #000000 !important; }
-            .section-heading { font-size: 10pt; font-weight: bold; margin-top: 20px; margin-bottom: 5px; text-decoration: underline; }
-            .footer-notes { font-size: 9.5pt; color: #222222; margin-bottom: 15px; }
-            .signature-space { margin-top: 50px; text-align: right; font-weight: bold; font-size: 10pt; }
-        </style>
-    `;
-
-        const sLetterheadHtml = `
-        <table class="letterhead-table" cellspacing="0" cellpadding="0">
-            <tr>
-                <td style="width: 50%; vertical-align: middle;">
-                    <span class="company-title">IN-TELECOM SERVICES</span>
-                </td>
-                <td class="company-details" style="width: 50%; vertical-align: top;">
-                    <b>Ph: (Off.):</b> 2348 1249<br>
-                    97400 27266 / 98442 11193<br>
-                    <b>E-mail:</b> intelecompatil@rediffmail.com<br>
-                    #249, 7th Main, 4th Cross, 2nd Stage,<br>
-                    Nagarabhavi, Bangalore-560072
-                </td>
-            </tr>
-        </table>
-        <div class="divider"></div>
-    `;
-
-        if (sSelectMode === "Quotation") {
-            const oHeader = oModel.getProperty("/header");
-            sFileName = this._getFirstLineName(oHeader.To) + "_Quotation.doc";
-
-            sHtmlContent = `
-            ${sStyleHeader}
-            ${sLetterheadHtml}
-            <div class="doc-title">QUOTATION</div>
-           
-            <table class="metadata-table" cellspacing="0" cellpadding="3">
-                <tr>
-                    <td class="metadata-label">To,</td>
-                    <td class="metadata-value" rowspan="2">${oHeader.To.replace(/\n/g, '<br>')}</td>
-                    <td class="metadata-label" style="text-align: right;">Date:</td>
-                    <td class="metadata-value">${oHeader.Date}</td>
-                </tr>
-                <tr>
-                    <td>&nbsp;</td>
-                    <td colspan="2">&nbsp;</td>
-                </tr>
-            </table>
-
-            <p style="font-size: 10pt; margin-bottom: 15px;"><b>Sub:</b> ${oHeader.Subject}</p>
-            ${oHeader.AddtionalInfo ? `<p style="font-size: 10pt; margin-bottom: 20px; padding-left: 30px;">${oHeader.AddtionalInfo}</p>` : ''}
-
-            <table class="items-table">
-                <thead>
-                    <tr>
-                        <th style="width: 8%;">Sl.No.</th>
-                        <th style="width: 52%;">Particulars</th>
-                        <th style="width: 12%;">Quantity</th>
-                        <th style="width: 13%;">Rate</th>
-                        <th style="width: 15%;">Total (Rs.)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${oModel.getProperty("/products").map((item: any, idx: number) => `
-                        <tr>
-                            <td class="text-center">${idx + 1}</td>
-                            <td>${item.productName.replace(/\n/g, '<br>')}</td>
-                            <td class="text-center">${item.quantity}</td>
-                            <td class="text-right">${item.price}${item.symbol}</td>
-                            <td class="text-right">${formatINR(item.total)}</td>
-                        </tr>
-                    `).join('')}
-                   
-                    <tr>
-                        <td colspan="4" class="total-row-label">18% GST Amount</td>
-                        <td class="total-row-value">${formatINR(oModel.getProperty("/gst"))}</td>
-                    </tr>
-                    <tr>
-                        <td colspan="4" class="total-row-label">Total</td>
-                        <td class="total-row-value">${formatINR(oModel.getProperty("/totalSum"))}</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            ${oHeader.TermsAndConditions ? `<div class="section-heading">Terms & Conditions:</div><div class="footer-notes">${oHeader.TermsAndConditions.replace(/\n/g, '<br>')}</div>` : ''}
-            ${oHeader.Notes ? `<div class="section-heading">Notes:</div><div class="footer-notes">${oHeader.Notes.replace(/\n/g, '<br>')}</div>` : ''}
-           
-            <div class="section-heading">Bank Details:</div>
-            <div class="footer-notes">${oHeader.BankDetails.replace(/\n/g, '<br>')}</div>
-
-            <div class="signature-space">
-                <p>For IN-TELECOM SERVICES</p>
-                <br><br><br>
-                <p>Authorized Signatory</p>
-            </div>
-        `;
-
-        } else if (sSelectMode === "TAX-INVOICE") {
-            const oHeader = oModel.getProperty("/taxHeader");
-            sFileName = this._getFirstLineName(oHeader.To) + "_TaxInvoice.doc";
-
-            sHtmlContent = `
-            ${sStyleHeader}
-            ${sLetterheadHtml}
-            <div class="doc-title">TAX INVOICE</div>
-           
-            <table class="metadata-table" cellspacing="0" cellpadding="3">
-                <tr>
-                    <td class="metadata-label">To,</td>
-                    <td class="metadata-value" style="width: 45%;" rowspan="5">${oHeader.To.replace(/\n/g, '<br>')}</td>
-                    <td class="metadata-label" style="text-align: right; width: 20%;">GST No:</td>
-                    <td class="metadata-value" style="width: 20%;">${oHeader.GSTNo}</td>
-                </tr>
-                <tr>
-                    <td>&nbsp;</td>
-                    <td class="metadata-label" style="text-align: right;">Invoice No:</td>
-                    <td><b>${oHeader.InvoiceNo}</b></td>
-                </tr>
-                <tr>
-                    <td>&nbsp;</td>
-                    <td class="metadata-label" style="text-align: right;">Date:</td>
-                    <td>${oHeader.Date}</td>
-                </tr>
-                <tr>
-                    <td>&nbsp;</td>
-                    <td class="metadata-label" style="text-align: right;">PO No:</td>
-                    <td>${oHeader.PONo}</td>
-                </tr>
-                <tr>
-                    <td>&nbsp;</td>
-                    <td class="metadata-label" style="text-align: right;">PO Date:</td>
-                    <td>${oHeader.PODate}</td>
-                </tr>
-            </table>
-
-            <table class="items-table">
-                <thead>
-                    <tr>
-                        <th style="width: 8%;">SI No.</th>
-                        <th style="width: 42%;">Particulars</th>
-                        <th style="width: 12%;">HSN Code</th>
-                        <th style="width: 13%;">Rate</th>
-                        <th style="width: 10%;">No.of Units</th>
-                        <th style="width: 15%;">Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${oModel.getProperty("/taxProducts").map((item: any, idx: number) => `
-                        <tr>
-                            <td class="text-center">${idx + 1}</td>
-                            <td>${item.taxpProductName.replace(/\n/g, '<br>')}</td>
-                            <td class="text-center">${item.taxHSNCode}</td>
-                            <td class="text-right">${formatINR(item.taxPrice)}${item.taxSymbol}</td>
-                            <td class="text-center">${item.taxQuantity}</td>
-                            <td class="text-right">${formatINR(item.taxTotal)}</td>
-                        </tr>
-                    `).join('')}
-                   
-                    <tr>
-                        <td colspan="5" class="total-row-label">TOTAL:</td>
-                        <td class="total-row-value">${formatINR(oModel.getProperty("/taxtotal"))}</td>
-                    </tr>
-                    <tr>
-                        <td colspan="5" class="total-row-label">CGST @ 9%:</td>
-                        <td class="total-row-value">${formatINR(oModel.getProperty("/taxcgst"))}</td>
-                    </tr>
-                    <tr>
-                        <td colspan="5" class="total-row-label">SGST @ 9%:</td>
-                        <td class="total-row-value">${formatINR(oModel.getProperty("/taxsgst"))}</td>
-                    </tr>
-                    <tr>
-                        <td colspan="5" class="total-row-label" style="font-size:10.5pt;">GRAND TOTAL:</td>
-                        <td class="total-row-value" style="font-size:10.5pt;">${formatINR(oModel.getProperty("/taxtotalSum"))}</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <p style="font-size: 10pt; margin-bottom: 5px;"><b>Rupees in words:</b> ${this.numberToWords(parseFloat(oModel.getProperty("/taxtotalSum")))} Only</p>
-            <p style="font-size: 10pt; margin-bottom: 20px;"><b>Party GST No:</b> ${oHeader.PartyGST || ""}</p>
-
-            <div class="section-heading">Bank Details:</div>
-            <div class="footer-notes">${oHeader.BankDetails.replace(/\n/g, '<br>')}</div>
-
-            <div class="signature-space">
-                <p>For IN-TELECOM SERVICES</p>
-                <br><br><br>
-                <p>Authorized Signatory</p>
-            </div>
-        `;
-
-        } else {
-            const oHeader = oModel.getProperty("/cashHeader");
-            sFileName = this._getFirstLineName(oHeader.cashTo) + "_CashBill.doc";
-
-            sHtmlContent = `
-            ${sStyleHeader}
-            ${sLetterheadHtml}
-            <div class="doc-title">CASH BILL</div>
-           
-            <table class="metadata-table" cellspacing="0" cellpadding="3">
-                <tr>
-                    <td class="metadata-label">To,</td>
-                    <td class="metadata-value" rowspan="2">${oHeader.cashTo.replace(/\n/g, '<br>')}</td>
-                    <td class="metadata-label" style="text-align: right;">Date:</td>
-                    <td class="metadata-value">${oHeader.cashDate}</td>
-                </tr>
-                <tr>
-                    <td>&nbsp;</td>
-                    <td colspan="2">&nbsp;</td>
-                </tr>
-            </table>
-
-            <table class="items-table">
-                <thead>
-                    <tr>
-                        <th style="width: 10%;">SI No.</th>
-                        <th style="width: 55%;">Particulars</th>
-                        <th style="width: 15%;">Quantity</th>
-                        <th style="width: 20%;">Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${oModel.getProperty("/cashProducts").map((item: any, idx: number) => `
-                        <tr>
-                            <td class="text-center">${idx + 1}</td>
-                            <td>${item.cashBody.replace(/\n/g, '<br>')}</td>
-                            <td class="text-center">${item.cashQuantity}</td>
-                            <td class="text-right">${formatINR(item.cashAmount)}</td>
-                        </tr>
-                    `).join('')}
-                   
-                    <tr>
-                        <td colspan="3" class="total-row-label" style="font-size:10.5pt;">GRAND TOTAL:</td>
-                        <td class="total-row-value" style="font-size:10.5pt;">${formatINR(oModel.getProperty("/cashTotalSum"))}</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <p style="font-size: 10pt; margin-bottom: 20px;"><b>Rupees in words:</b> ${this.numberToWords(parseFloat(oModel.getProperty("/cashTotalSum")))} Only</p>
-
-            <div class="section-heading">Bank Details:</div>
-            <div class="footer-notes">${oHeader.cashbankDetails.replace(/\n/g, '<br>')}</div>
-
-            <div class="signature-space">
-                <p>For IN-TELECOM SERVICES</p>
-                <br><br><br>
-                <p>Authorized Signatory</p>
-            </div>
-        `;
-        }
-
-        const sFullBlobTemplate = `
-        <html xmlns:o='urn:schemas-microsoft-com:office:office'
-              xmlns:w='urn:schemas-microsoft-com:office:word'
-              xmlns='http://www.w3.org/TR/REC-html40'>
-        <head>
-            </head>
-        <body>
-            <div style="margin: 0.5in 0.5in 0.5in 0.5in;">
-                ${sHtmlContent}
-            </div>
-        </body>
-        </html>
-    `;
-
-        const blob = new Blob([sFullBlobTemplate], { type: 'application/msword' });
-        const URL = window.URL || window.webkitURL;
-        const downloadLink = document.createElement("a");
-
-        downloadLink.href = URL.createObjectURL(blob);
-        downloadLink.download = sFileName;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-    }
+   
 
     private numberToWords(num: number): string {
         const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
@@ -1043,7 +855,7 @@ export default class View extends Controller {
         if (num === 0) return 'Zero';
 
         const convertWholeNumber = (amountStr: string): string => {
-            const n = ('000000000' + amountStr).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+            const n = ('000000000' + amountStr).substring(amountStr.length + 9 - 9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
             if (!n) return '';
 
             let str = '';
@@ -1075,5 +887,84 @@ export default class View extends Controller {
             }
         }
         return result.trim();
+    }
+
+    /**
+     * Triggered when the value help icon inside the Input field is clicked
+     */
+    public async onHSNValueHelpRequest(oEvent: any): Promise<void> {
+        // Store reference to the source input control to set the value later
+        const oInput = oEvent.getSource() as Input;
+        this.getView()?.data("valueHelpSourceInput", oInput);
+
+        // Load the XML Fragment asynchronously
+        if (!this._pDialog) {
+            this._pDialog = Fragment.load({
+                id: this.getView()?.getId(),
+                name: "my.app.generatebill.view.HSNValueHelpDialog",
+                controller: this
+            }) as Promise<TableSelectDialog>;
+
+            // Connect dialog to the lifecycle of the view
+            const oDialog = await this._pDialog;
+            this.getView()?.addDependent(oDialog);
+        }
+
+        const oDialog = await this._pDialog;
+
+        // Ensure all rows are shown initially by resetting filters on open
+        const oBinding = oDialog.getBinding("items") as ListBinding;
+        if (oBinding) {
+            oBinding.filter([]);
+        }
+
+        oDialog.open("");
+    }
+
+    /**
+     * Handles search option for all columns (HSN_CD and HSN_Description)
+     */
+    public onHSNValueHelpSearch(oEvent: TableSelectDialog$SearchEvent): void {
+        const sValue = oEvent.getParameter("value");
+        const oDialog = oEvent.getSource() as TableSelectDialog;
+        const oBinding = oDialog.getBinding("items") as ListBinding;
+
+        if (!sValue) {
+            oBinding.filter([]);
+            return;
+        }
+
+        // Create individual filters matching case-insensitive substrings
+        const oFilterCode = new Filter("HSN_CD", FilterOperator.Contains, sValue);
+        const oFilterDesc = new Filter("HSN_Description", FilterOperator.Contains, sValue);
+
+        // Combine using 'false' flag for OR operator to query both columns simultaneously
+        const oCombinedFilter = new Filter({
+            filters: [oFilterCode, oFilterDesc],
+            and: false
+        });
+
+        oBinding.filter([oCombinedFilter]);
+    }
+
+    /**
+     * Triggered when a row is selected or clicked
+     */
+    public onHSNValueHelpConfirm(oEvent: TableSelectDialog$ConfirmEvent): void {
+        const oSelectedItem = oEvent.getParameter("selectedItem");
+        const oInput = this.getView()?.data("valueHelpSourceInput") as Input;
+
+        if (!oSelectedItem) {
+            return;
+        }
+
+        // Get the structural bound context object properties
+        const oContext = oSelectedItem.getBindingContext("hsnModel");
+        if (oContext) {
+            const sSelectedCode = oContext.getProperty("HSN_CD") as string;
+
+            // Populate value to your Input element
+            oInput.setValue(sSelectedCode);
+        }
     }
 }

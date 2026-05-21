@@ -257,7 +257,7 @@
                                         />
                                         <Button
                                             icon="sap-icon://download"
-                                            text="Download Excel"
+                                            text="Excel"
                                             press=".onExcelDownload"
                                             type="Neutral"
                                         />
@@ -365,6 +365,7 @@
                                         <Button
                                             icon="sap-icon://download"
                                             text="Excel"
+                                            type="Neutral"
                                             press=".onExcelDownload"
                                         />
                                         <Button
@@ -405,7 +406,11 @@
                                             <TextArea
                                                 value="{taxpProductName}"
                                             />
-                                            <Input value="{taxHSNCode}" />
+                                            <Input
+                                                value="{taxHSNCode}"
+                                                showValueHelp="true"
+                                                valueHelpRequest=".onHSNValueHelpRequest"
+                                            />
                                             <Input
                                                 value="{taxPrice}"
                                                 change=".onTaxCalc"
@@ -526,6 +531,7 @@
                                         <Button
                                             icon="sap-icon://download"
                                             text="Excel"
+                                            type="Neutral"
                                             press=".onExcelDownload"
                                         />
                                         <Button

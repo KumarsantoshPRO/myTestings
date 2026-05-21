@@ -59,6 +59,10 @@
 						""
 					]
 				}
+			},
+			"hsnModel": {
+				"type": "sap.ui.model.json.JSONModel",
+				"uri": "model/HSN_SAC.json"
 			}
 		},
 		"resources": {
