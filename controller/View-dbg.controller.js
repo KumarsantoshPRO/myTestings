@@ -1153,91 +1153,270 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
      * scans the text for a mobile number to automatically pre-fill the input,
      * and opens the WhatsApp interface on confirmation.
      */
-    onShareToWhatsApp: function _onShareToWhatsApp() {
+    onShareToWhatsApp: async function _onShareToWhatsApp() {
       const oView = this.getView();
-      if (!oView) {
-        return;
-      }
+      if (!oView) return;
       const sSelectMode = oView.byId("mySelect").getSelectedItem()?.getText();
       const oModel = oView.getModel();
+      const jspdfLib = window.jspdf;
+      if (!jspdfLib) {
+        MessageBox.error("jsPDF library is not loaded.");
+        return;
+      }
       let sClientName = "";
       let sTotalAmount = "";
       let sDocIdentifier = "";
       let sRawAddressText = "";
+      let sTargetFilename = "Document.pdf";
 
-      // 1. Scrape relevant details and full address string based on active layout state
+      // 1. Instantiating a temporary jsPDF instance to generate the specific file bytes
+      const doc = new jspdfLib.jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      const margin = 5;
+
+      // Apply standard border framing
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.3);
+      doc.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
+      if (this.sLogoBase64) {
+        doc.addImage(this.sLogoBase64, 'JPEG', 14, 10, 70, 25);
+      }
+      doc.setFontSize(10);
+      doc.text("Ph: (Off.): 2348 1249", pageWidth - 14, 15, {
+        align: 'right'
+      });
+      doc.text("97400 27266 / 98442 11193", pageWidth - 14, 20, {
+        align: 'right'
+      });
+      doc.text("E-mail: intelecompatil@rediffmail.com", pageWidth - 14, 25, {
+        align: 'right'
+      });
+      doc.setFontSize(9);
+      doc.text("#249, 7th Main, 4th Cross, 2nd Stage,", pageWidth - 14, 30, {
+        align: 'right'
+      });
+      doc.text("Nagarabhavi, Bangalore-560072", pageWidth - 14, 35, {
+        align: 'right'
+      });
+      doc.line(5, 40, pageWidth - 5, 40);
+
+      // 2. Replicate your specific document generation logic conditionally
       if (sSelectMode === "Quotation") {
-        sRawAddressText = oModel.getProperty("/header/To") || "";
+        const oHeader = oModel.getProperty("/header");
+        const aItems = oModel.getProperty("/products");
+        sRawAddressText = oHeader.To || "";
         sClientName = this._getFirstLineName(sRawAddressText);
         sTotalAmount = formatINR(oModel.getProperty("/totalSum"));
         sDocIdentifier = "Quotation";
+        sTargetFilename = `${sClientName}_Quotation.pdf`;
+        doc.setFont("helvetica", "bold");
+        doc.text(`Date: ${oHeader.Date}`, pageWidth - 14, 45, {
+          align: 'right'
+        });
+        doc.text("To,", 14, 45);
+        doc.setFont("helvetica", "normal");
+        doc.text(doc.splitTextToSize(oHeader.To, 80), 14, 50);
+        doc.setFont("helvetica", "bold");
+        let finalHeaderY = 70;
+        doc.text("Sub: " + oHeader.Subject, 14, 70);
+        doc.setFont("helvetica", "normal");
+        if (oHeader.AddtionalInfo !== "") {
+          doc.text(oHeader.AddtionalInfo, 14, finalHeaderY + 4);
+        }
+        const bShowGST = oView.byId("chkGST").getSelected();
+        const bShowTotal = oView.byId("chkTotal").getSelected();
+        const tableBody = aItems.map((item, index) => [index + 1, item.productName, item.quantity, item.price + item.symbol, formatINR(item.total)]);
+        const subtotal = aItems.reduce((acc, cur) => acc + parseFloat(cur.total || 0), 0);
+        const gstAmount = subtotal * 0.18;
+        const grandTotal = subtotal + gstAmount;
+        if (bShowGST) tableBody.push([{
+          content: '18% GST Amount',
+          colSpan: 4,
+          styles: {
+            halign: 'right',
+            fontStyle: 'bold'
+          }
+        }, {
+          content: formatINR(gstAmount),
+          styles: {
+            halign: 'right',
+            fontStyle: 'bold'
+          }
+        }]);
+        if (bShowTotal) tableBody.push([{
+          content: 'Total',
+          colSpan: 4,
+          styles: {
+            halign: 'right',
+            fontStyle: 'bold'
+          }
+        }, {
+          content: formatINR(grandTotal),
+          styles: {
+            halign: 'right',
+            fontStyle: 'bold'
+          }
+        }]);
+        doc.autoTable({
+          startY: finalHeaderY + 8,
+          head: [['Sl.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']],
+          body: tableBody,
+          theme: 'grid',
+          styles: {
+            fontSize: 9,
+            lineColor: [0, 0, 0],
+            lineWidth: 0.1
+          },
+          headStyles: {
+            fillColor: [255, 255, 255],
+            textColor: [0, 0, 0],
+            fontStyle: 'bold'
+          }
+        });
+        let finalY = doc.lastAutoTable.finalY;
+        if (oHeader.TermsAndConditions !== "") {
+          finalY += 10;
+          doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 4);
+        }
+        if (oView.byId("chkBankDetail").getSelected()) {
+          finalY += 20;
+          doc.text(doc.splitTextToSize(oHeader.BankDetails, pageWidth - 28), 14, finalY + 4);
+        }
       } else if (sSelectMode === "TAX-INVOICE") {
-        sRawAddressText = oModel.getProperty("/taxHeader/To") || "";
+        const oData = oModel.getData();
+        sRawAddressText = oData.taxHeader.To || "";
         sClientName = this._getFirstLineName(sRawAddressText);
         sTotalAmount = formatINR(oModel.getProperty("/taxtotalSum"));
-        sDocIdentifier = `Tax Invoice (${oModel.getProperty("/taxHeader/InvoiceNo") || "N/A"})`;
+        sDocIdentifier = `Tax Invoice (${oData.taxHeader.InvoiceNo || "N/A"})`;
+        sTargetFilename = `${sClientName}_TaxInvoice.pdf`;
+        doc.setFont("helvetica", "bold");
+        doc.text("To,", 15, 44);
+        doc.setFont("helvetica", "normal");
+        doc.text(doc.splitTextToSize(oData.taxHeader.To, 90), 15, 49);
+        const metaX = 130;
+        doc.text(`GST No: ${oData.taxHeader.GSTNo}`, metaX, 44);
+        doc.text(`Invoice No: ${oData.taxHeader.InvoiceNo}`, metaX, 50);
+        doc.text(`Date: ${oData.taxHeader.Date}`, metaX, 56);
+        const tableRows = oData.taxProducts.map((item, index) => [index + 1, item.taxpProductName, item.taxHSNCode, formatINR(item.taxPrice) + item.taxSymbol, item.taxQuantity, formatINR(item.taxTotal)]);
+        const totalAmount = oData.taxProducts.reduce((sum, item) => sum + parseFloat(item.taxTotal), 0);
+        const taxVal = totalAmount * 0.09;
+        const grandTotal = totalAmount + taxVal * 2;
+        tableRows.push([{
+          content: `TOTAL:`,
+          colSpan: 5,
+          styles: {
+            halign: 'right',
+            fontStyle: 'bold'
+          }
+        }, {
+          content: formatINR(totalAmount),
+          styles: {
+            halign: 'right',
+            fontStyle: 'bold'
+          }
+        }], [{
+          content: `GRAND TOTAL:`,
+          colSpan: 5,
+          styles: {
+            halign: 'right',
+            fontStyle: 'bold',
+            fontSize: 10
+          }
+        }, {
+          content: formatINR(grandTotal),
+          styles: {
+            halign: 'right',
+            fontStyle: 'bold',
+            fontSize: 10
+          }
+        }]);
+        doc.autoTable({
+          startY: 75,
+          head: [["SI No.", "Particulars", "HSN Code", "Rate", "No.of Units", "Amount"]],
+          body: tableRows,
+          theme: 'grid'
+        });
+        const finalY = doc.lastAutoTable.finalY + 5;
+        doc.text(`Rupees in words: ${this.numberToWords(grandTotal)} Only`, 10, finalY + 10);
       } else {
-        sRawAddressText = oModel.getProperty("/cashHeader/cashTo") || "";
+        const oData = oModel.getData();
+        sRawAddressText = oData.cashHeader.cashTo || "";
         sClientName = this._getFirstLineName(sRawAddressText);
         sTotalAmount = formatINR(oModel.getProperty("/cashTotalSum"));
         sDocIdentifier = "Cash Bill";
+        sTargetFilename = `${sClientName}_CashBill.pdf`;
+        doc.setFont("helvetica", "bold");
+        doc.text("To,", 15, 46);
+        doc.setFont("helvetica", "normal");
+        doc.text(doc.splitTextToSize(oData.cashHeader.cashTo, 90), 15, 51);
+        doc.text(`Date: ${oData.cashHeader.cashDate}`, pageWidth - 14, 46, {
+          align: 'right'
+        });
+        const tableRows = oData.cashProducts.map((item, index) => [index + 1, item.cashBody, item.cashQuantity, formatINR(item.cashAmount)]);
+        const totalAmount = oData.cashProducts.reduce((sum, item) => sum + parseFloat(item.cashAmount || 0), 0);
+        tableRows.push([{
+          content: `GRAND TOTAL:`,
+          colSpan: 3,
+          styles: {
+            halign: 'right',
+            fontStyle: 'bold',
+            fontSize: 10
+          }
+        }, {
+          content: formatINR(totalAmount),
+          styles: {
+            halign: 'right',
+            fontStyle: 'bold',
+            fontSize: 10
+          }
+        }]);
+        doc.autoTable({
+          startY: 75,
+          head: [["SI No.", "Particulars", "Quantity", "Amount"]],
+          body: tableRows,
+          theme: 'grid'
+        });
+      }
+      if (this.sSignaturBase64) {
+        doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 40, 70, 25);
       }
 
-      // 2. Smart Phone Extraction: Scan address block for an Indian mobile number
-      const aPhoneMatch = sRawAddressText.match(/(?:(?:\+91)|91)?\s*([6-9]\d{9})\b/);
-      const sPreFilledPhone = aPhoneMatch ? aPhoneMatch[1] : "";
-
-      // 3. Create the input control and pre-populate it if a number was extracted
-      const oPhoneInput = new Input({
-        placeholder: "Enter 10-digit number (e.g. 9844211193)",
-        type: "Tel",
-        width: "100%",
-        value: sPreFilledPhone
+      // 3. Extract the PDF as an array buffer blob instead of downloading immediately
+      const blobHTML5 = doc.output('blob');
+      const pdfFile = new File([blobHTML5], sTargetFilename, {
+        type: 'application/pdf'
       });
 
-      // 4. Construct and display the confirmation dialog
-      const oDialog = new Dialog({
-        title: `Share ${sSelectMode} Details via WhatsApp`,
-        type: "Message",
-        content: [new Text({
-          text: `Send direct notification details for ${sClientName} (Total: Rs. ${sTotalAmount}). Confirm or enter the mobile number below:`
-        }), oPhoneInput],
-        beginButton: new Button({
-          text: "Open WhatsApp Chat",
-          press: () => {
-            let sRawPhone = oPhoneInput.getValue() ? oPhoneInput.getValue().trim() : "";
-            if (!sRawPhone || sRawPhone.length < 10) {
-              MessageBox.error("Please enter a valid target mobile contact number.");
-              return;
-            }
-
-            // Prepend country code '91' automatically if user provides a standard 10-digit Indian number
-            if (!sRawPhone.startsWith("91") && sRawPhone.length === 10) {
-              sRawPhone = "91" + sRawPhone;
-            }
-
-            // 5. Assemble clean markdown-formatted text block for WhatsApp message layout
-            const sMessageText = `Hello ${sClientName},\n\nYour *${sDocIdentifier}* from *IN-TELECOM SERVICES* is ready.\n\n*Amount Due:* Rs. ${sTotalAmount}\n\nThank you for choosing our services!`;
-            const sEncodedMessage = encodeURIComponent(sMessageText);
-            const sWhatsAppUrl = `https://api.whatsapp.com/send?phone=${sRawPhone}&text=${sEncodedMessage}`;
-
-            // Hand off control to browser layer redirection to launch WhatsApp Web / Desktop application
-            sap.m.URLHelper.redirect(sWhatsAppUrl, true);
-            oDialog.close();
-          }
-        }),
-        endButton: new Button({
-          text: "Cancel",
-          press: () => {
-            oDialog.close();
-          }
-        }),
-        afterClose: () => {
-          oDialog.destroy();
+      // 4. Verify if the host browser device environment supports shared attachments natively
+      if (navigator.canShare && navigator.canShare({
+        files: [pdfFile]
+      })) {
+        try {
+          await navigator.share({
+            files: [pdfFile],
+            title: `${sDocIdentifier} - IN-TELECOM SERVICES`,
+            text: `Hello ${sClientName},\n\nYour *${sDocIdentifier}* from *IN-TELECOM SERVICES* is attached.\n\n*Amount Due:* Rs. ${sTotalAmount}\n\nThank you!`
+          });
+          MessageToast.show("Share prompt initialized successfully.");
+        } catch (error) {
+          MessageBox.error("Sharing processing was cancelled or encountered an error.");
         }
-      });
-      oView.addDependent(oDialog);
-      oDialog.open();
+      } else {
+        // Fallback for non-supported browsers (Desktop Chrome / Legacy Environments)
+        MessageBox.information("Direct file attachment is not supported on this browser window configuration. The PDF file will be downloaded onto your local system shelf. You can drag and drop it into your WhatsApp target chat window manually.", {
+          title: "Browser Sharing Limitation",
+          onClose: () => {
+            doc.save(sTargetFilename);
+
+            // Fall back to opening the standard text api thread link
+            const aPhoneMatch = sRawAddressText.match(/(?:(?:\+91)|91)?\s*([6-9]\d{9})\b/);
+            let sTargetPhone = aPhoneMatch ? "91" + aPhoneMatch[1] : "";
+            const sMessageText = `Hello ${sClientName},\n\nYour *${sDocIdentifier}* from *IN-TELECOM SERVICES* is ready.\n\n*Amount Due:* Rs. ${sTotalAmount}`;
+            sap.m.URLHelper.redirect(`https://api.whatsapp.com/send?phone=${sTargetPhone}&text=${encodeURIComponent(sMessageText)}`, true);
+          }
+        });
+      }
     }
   });
   return View;
