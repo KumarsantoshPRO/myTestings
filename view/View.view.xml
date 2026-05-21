@@ -613,7 +613,13 @@
                     press=".onExportToMSWord"
                     visible="false"
                 />
-
+                <Button
+                    id="idSendToWhatsApp"
+                    icon="sap-icon://paper-plane"
+                    text="send to WhatsApp"
+                    type="Transparent"
+                    press="onShareToWhatsApp"
+                />
                 <Button
                     id="idBtnQuotation"
                     icon="sap-icon://pdf-attachment"

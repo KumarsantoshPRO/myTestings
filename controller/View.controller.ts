@@ -16,8 +16,11 @@ import FilterOperator from "sap/ui/model/FilterOperator";
 import ListBinding from "sap/ui/model/ListBinding";
 import ColumnListItem from "sap/m/ColumnListItem";
 import DateFormat from "sap/ui/core/format/DateFormat";
+ 
+import IconPool from "sap/ui/core/IconPool";
 
 declare var jspdf: any;
+declare var sap: any;
 declare var XLSX: any; // External SheetJS Library Reference
 
 const formatINR = (amount: number | string): string => {
@@ -42,6 +45,9 @@ export default class View extends Controller {
     private sCustomTriggerFlag: string = "my_billing_app_use_custom_start_flag";
 
     public onInit(): void {
+
+     
+
         let oData: any;
         const sSavedData = localStorage.getItem(this.sStorageKey);
         // 1. Get today's date
@@ -977,5 +983,101 @@ export default class View extends Controller {
             // Populate value to your Input element
             oInput.setValue(sSelectedCode);
         }
+
+
     }
+    /**
+     * Extracts model info depending on selected visibility context mode,
+     * scans the text for a mobile number to automatically pre-fill the input,
+     * and opens the WhatsApp interface on confirmation.
+     */
+    public onShareToWhatsApp(): void {
+        const oView = this.getView();
+        if (!oView) {
+            return;
+        }
+
+        const sSelectMode = (oView.byId("mySelect") as Select).getSelectedItem()?.getText();
+        const oModel = oView.getModel() as JSONModel;
+
+        let sClientName = "";
+        let sTotalAmount = "";
+        let sDocIdentifier = "";
+        let sRawAddressText = "";
+
+        // 1. Scrape relevant details and full address string based on active layout state
+        if (sSelectMode === "Quotation") {
+            sRawAddressText = oModel.getProperty("/header/To") || "";
+            sClientName = this._getFirstLineName(sRawAddressText);
+            sTotalAmount = formatINR(oModel.getProperty("/totalSum"));
+            sDocIdentifier = "Quotation";
+        } else if (sSelectMode === "TAX-INVOICE") {
+            sRawAddressText = oModel.getProperty("/taxHeader/To") || "";
+            sClientName = this._getFirstLineName(sRawAddressText);
+            sTotalAmount = formatINR(oModel.getProperty("/taxtotalSum"));
+            sDocIdentifier = `Tax Invoice (${oModel.getProperty("/taxHeader/InvoiceNo") || "N/A"})`;
+        } else {
+            sRawAddressText = oModel.getProperty("/cashHeader/cashTo") || "";
+            sClientName = this._getFirstLineName(sRawAddressText);
+            sTotalAmount = formatINR(oModel.getProperty("/cashTotalSum"));
+            sDocIdentifier = "Cash Bill";
+        }
+
+        // 2. Smart Phone Extraction: Scan address block for an Indian mobile number
+        const aPhoneMatch = sRawAddressText.match(/(?:(?:\+91)|91)?\s*([6-9]\d{9})\b/);
+        const sPreFilledPhone = aPhoneMatch ? aPhoneMatch[1] : "";
+
+        // 3. Create the input control and pre-populate it if a number was extracted
+        const oPhoneInput = new Input({
+            placeholder: "Enter 10-digit number (e.g. 9844211193)",
+            type: "Tel",
+            width: "100%",
+            value: sPreFilledPhone
+        });
+
+        // 4. Construct and display the confirmation dialog
+        const oDialog = new Dialog({
+            title: `Share ${sSelectMode} Details via WhatsApp`,
+            type: "Message",
+            content: [
+                new Text({
+                    text: `Send direct notification details for ${sClientName} (Total: Rs. ${sTotalAmount}). Confirm or enter the mobile number below:`
+                }),
+                oPhoneInput
+            ],
+            beginButton: new Button({
+                text: "Open WhatsApp Chat",
+                press: () => {
+                    let sRawPhone = oPhoneInput.getValue() ? oPhoneInput.getValue().trim() : "";
+                    if (!sRawPhone || sRawPhone.length < 10) {
+                        MessageBox.error("Please enter a valid target mobile contact number.");
+                        return;
+                    }
+
+                    // Prepend country code '91' automatically if user provides a standard 10-digit Indian number
+                    if (!sRawPhone.startsWith("91") && sRawPhone.length === 10) {
+                        sRawPhone = "91" + sRawPhone;
+                    }
+
+                    // 5. Assemble clean markdown-formatted text block for WhatsApp message layout
+                    const sMessageText = `Hello ${sClientName},\n\nYour *${sDocIdentifier}* from *IN-TELECOM SERVICES* is ready.\n\n*Amount Due:* Rs. ${sTotalAmount}\n\nThank you for choosing our services!`;
+                    const sEncodedMessage = encodeURIComponent(sMessageText);
+                    const sWhatsAppUrl = `https://api.whatsapp.com/send?phone=${sRawPhone}&text=${sEncodedMessage}`;
+
+                    // Hand off control to browser layer redirection to launch WhatsApp Web / Desktop application
+                    sap.m.URLHelper.redirect(sWhatsAppUrl, true);
+                    oDialog.close();
+                }
+            }),
+            endButton: new Button({
+                text: "Cancel",
+                press: () => { oDialog.close(); }
+            }),
+            afterClose: () => { oDialog.destroy(); }
+        });
+
+        oView.addDependent(oDialog);
+        oDialog.open();
+    }
+
 }
