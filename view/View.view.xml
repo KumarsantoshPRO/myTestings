@@ -615,10 +615,10 @@
                 />
                 <Button
                     id="idSendToWhatsApp"
-                    icon="sap-icon://paper-plane"
-                    text="send to WhatsApp"
+                    icon="sap-icon://share-2"
                     type="Transparent"
                     press="onShareToWhatsApp"
+                    tooltip="Share"
                 />
                 <Button
                     id="idBtnQuotation"
