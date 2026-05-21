@@ -15,6 +15,7 @@ import Filter from "sap/ui/model/Filter";
 import FilterOperator from "sap/ui/model/FilterOperator";
 import ListBinding from "sap/ui/model/ListBinding";
 import ColumnListItem from "sap/m/ColumnListItem";
+import DateFormat from "sap/ui/core/format/DateFormat";
 
 declare var jspdf: any;
 declare var XLSX: any; // External SheetJS Library Reference
@@ -43,6 +44,16 @@ export default class View extends Controller {
     public onInit(): void {
         let oData: any;
         const sSavedData = localStorage.getItem(this.sStorageKey);
+        // 1. Get today's date
+        var oToday = new Date();
+
+        // 2. Create a formatter matching your XML valueFormat
+        var oDateFormat = (DateFormat as any).getInstance({
+            pattern: "dd-MM-yyyy"
+        });
+
+        // 3. Format today's date into the string
+        var sTodayDate = oDateFormat.format(oToday);
 
         if (sSavedData) {
             try {
@@ -56,7 +67,7 @@ export default class View extends Controller {
             oData = {
                 header: {
                     To: "",
-                    Date: "",
+                    Date: sTodayDate,
                     Subject: "",
                     AddtionalInfo: "",
                     Notes: "",
@@ -70,7 +81,7 @@ export default class View extends Controller {
                     To: "",
                     GSTNo: "29AGKPP7288F1Z0",
                     InvoiceNo: "",
-                    Date: "",
+                    Date: sTodayDate,
                     PONo: "",
                     PODate: "",
                     PartyGST: "",
@@ -81,7 +92,7 @@ export default class View extends Controller {
                 ],
                 cashHeader: {
                     cashTo: "",
-                    cashDate: "",
+                    cashDate: sTodayDate,
                     cashbankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
                 },
                 cashProducts: [
@@ -846,7 +857,7 @@ export default class View extends Controller {
         reader.readAsArrayBuffer(oFile);
     }
 
-   
+
 
     private numberToWords(num: number): string {
         const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];

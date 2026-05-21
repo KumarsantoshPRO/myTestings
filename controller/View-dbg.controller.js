@@ -1,4 +1,4 @@
-sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap/m/MessageBox", "sap/m/MessageToast", "sap/m/Button", "sap/m/Dialog", "sap/m/Input", "sap/m/Text", "sap/ui/core/Fragment", "sap/ui/model/Filter", "sap/ui/model/FilterOperator"], function (Controller, JSONModel, MessageBox, MessageToast, Button, Dialog, Input, Text, Fragment, Filter, FilterOperator) {
+sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap/m/MessageBox", "sap/m/MessageToast", "sap/m/Button", "sap/m/Dialog", "sap/m/Input", "sap/m/Text", "sap/ui/core/Fragment", "sap/ui/model/Filter", "sap/ui/model/FilterOperator", "sap/ui/core/format/DateFormat"], function (Controller, JSONModel, MessageBox, MessageToast, Button, Dialog, Input, Text, Fragment, Filter, FilterOperator, DateFormat) {
   "use strict";
 
   // External SheetJS Library Reference
@@ -27,6 +27,16 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
     onInit: function _onInit() {
       let oData;
       const sSavedData = localStorage.getItem(this.sStorageKey);
+      // 1. Get today's date
+      var oToday = new Date();
+
+      // 2. Create a formatter matching your XML valueFormat
+      var oDateFormat = DateFormat.getInstance({
+        pattern: "dd-MM-yyyy"
+      });
+
+      // 3. Format today's date into the string
+      var sTodayDate = oDateFormat.format(oToday);
       if (sSavedData) {
         try {
           oData = JSON.parse(sSavedData);
@@ -38,7 +48,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         oData = {
           header: {
             To: "",
-            Date: "",
+            Date: sTodayDate,
             Subject: "",
             AddtionalInfo: "",
             Notes: "",
@@ -56,7 +66,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             To: "",
             GSTNo: "29AGKPP7288F1Z0",
             InvoiceNo: "",
-            Date: "",
+            Date: sTodayDate,
             PONo: "",
             PODate: "",
             PartyGST: "",
@@ -72,7 +82,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           }],
           cashHeader: {
             cashTo: "",
-            cashDate: "",
+            cashDate: sTodayDate,
             cashbankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
           },
           cashProducts: [{
