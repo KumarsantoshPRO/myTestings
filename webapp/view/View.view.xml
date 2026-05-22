@@ -14,8 +14,13 @@
         showFooter="true"
     >
         <uxap:headerTitle>
-            <uxap:ObjectPageHeader objectTitle="IN-TELECOM SERVICES">
-                <Text text="GST No: 29AGKPP7288F1Z0" />
+            <uxap:ObjectPageHeader objectTitle="IN-TELECOM SERVICES" objectSubtitle="GSTIN: 29AGKPP7288F1Z0" >
+                <Button
+                    icon="sap-icon://bar-chart"
+                    press="onShowAnalyticsGraph"
+                    type="Emphasized"
+                />
+
                 <Select
                     id="mySelect"
                     change=".onSelectChange"
