@@ -1568,13 +1568,37 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       }
     },
     /**
-     * Fetches analytical transaction logs from your cloud database bin and presents
-     * an interactive, filterable analytics dashboard with rolling dynamic year filters.
-     */
+    * Fetches analytical transaction logs from your cloud database bin and presents
+    * an interactive dashboard, complete with automated daily limits, storage thresholds, and API cap alerts.
+    */
     onShowAnalyticsGraph: async function _onShowAnalyticsGraph() {
+      // =========================================================================
+      // NEW: LOCAL DAILY LIMIT SPEED BUMP TRACKER (Max 50 views per day)
+      // =========================================================================
+      const sTodayDateKey = new Date().toDateString(); // e.g., "Fri May 22 2026"
+      const sStoredDate = localStorage.getItem("analytics_view_date");
+      let iDailyCount = parseInt(localStorage.getItem("analytics_daily_count") || "0", 10);
+      if (sStoredDate === sTodayDateKey) {
+        // If we are still on the same calendar day, check the threshold counter
+        if (iDailyCount >= 50) {
+          sap.m.MessageBox.error(`Daily View Limit Reached: You have opened the analytics dashboard 50 times today. To protect your free tier API limit, further loads are restricted until tomorrow.`, {
+            title: "Daily Limit Speed-Bump"
+          });
+          return; // STOP EXECUTION IMMEDIATELY - Bypasses jsonbin completely
+        }
+        // Increment count locally
+        iDailyCount++;
+        localStorage.setItem("analytics_daily_count", iDailyCount.toString());
+      } else {
+        // If it's a new calendar day, reset the counter variables back to 1
+        localStorage.setItem("analytics_view_date", sTodayDateKey);
+        localStorage.setItem("analytics_daily_count", "1");
+      }
+
+      // Proceed with cloud initialization if under the 50-click boundary limit
       sap.ui.core.BusyIndicator.show(0);
       try {
-        // 1. Fetch historical record arrays from your separate analytics bin container
+        // 1. Fetch live transaction data history from jsonbin
         const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}/latest`, {
           method: "GET",
           headers: {
@@ -1582,22 +1606,38 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           }
         });
         if (!response.ok) throw new Error("Could not retrieve analytical transaction entries.");
+
+        // LOGIC 2: API Request Limit Warning (Triggers if monthly limit hits 9000+)
+        const sLimitHeader = response.headers.get("x-ratelimit-limit");
+        const sRemainingHeader = response.headers.get("x-ratelimit-remaining");
+        if (sLimitHeader && sRemainingHeader) {
+          const iTotalLimit = parseInt(sLimitHeader, 10);
+          const iRemaining = parseInt(sRemainingHeader, 10);
+          const iConsumedRequests = iTotalLimit - iRemaining;
+          if (iConsumedRequests >= 9000) {
+            sap.m.MessageBox.warning(`Critical API Consumption Warning: You have utilized ${iConsumedRequests} out of your ${iTotalLimit} free monthly API requests.`, {
+              title: "API Threshold Alert"
+            });
+          }
+        }
         const result = await response.json();
         const aRecords = result.record.records || [];
 
-        // 2. Initialize the dynamic UI container wrappers
+        // LOGIC 1: Document Storage Capacity Reminder (Triggers at 60+ entries)
+        if (aRecords.length >= 60) {
+          sap.m.MessageBox.information(`Storage Optimization Notice: Your cloud analytics history currently holds ${aRecords.length} documents and is approaching its free capacity boundary (70 max).`, {
+            title: "Storage Reminder Alert"
+          });
+        }
         const oHtmlMetricsDashboard = new sap.ui.core.HTML();
 
-        // 3. Calculate rolling calendar year strings dynamically (Current Year, -1, -2)
+        // Calculate rolling calendar year strings dynamically (Current Year, -1, -2)
         const iCurrentYear = new Date().getFullYear();
         const sYearCurrent = iCurrentYear.toString();
         const sYearMinus1 = (iCurrentYear - 1).toString();
         const sYearMinus2 = (iCurrentYear - 2).toString();
-
-        // 4. Define responsive dropdown selectors for Year and Month filtering
         const oYearSelect = new sap.m.Select({
           selectedKey: sYearCurrent,
-          // Defaults to current year string
           items: [new sap.ui.core.Item({
             key: "ALL",
             text: "All Years"
@@ -1614,7 +1654,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         });
         const oMonthSelect = new sap.m.Select({
           selectedKey: "ALL",
-          // Defaults to all months string
           items: [new sap.ui.core.Item({
             key: "ALL",
             text: "All Months"
@@ -1629,23 +1668,17 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           items: [oYearSelect, oMonthSelect]
         }).addStyleClass("sapUiSmallMarginBottom");
 
-        // 5. Core calculation engine loop to process dropdown selections reactively
+        // Core calculation engine loop to process dropdown selections reactively
         const fnFilterAndRefreshDashboard = () => {
           const sSelYear = oYearSelect.getSelectedKey();
           const sSelMonth = oMonthSelect.getSelectedKey();
-
-          // Filter dataset entries matching selected filter keys
           const aFiltered = aRecords.filter(rec => {
             const oDate = new Date(rec.timestamp);
             const aMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
             const sRowYear = rec.year || oDate.getFullYear().toString();
             const sRowMonth = rec.month || aMonths[oDate.getMonth()];
-            const bYearMatch = sSelYear === "ALL" || sRowYear === sSelYear;
-            const bMonthMatch = sSelMonth === "ALL" || sRowMonth === sSelMonth;
-            return bYearMatch && bMonthMatch;
+            return (sSelYear === "ALL" || sRowYear === sSelYear) && (sSelMonth === "ALL" || sRowMonth === sSelMonth);
           });
-
-          // Calculate aggregated numeric totals
           let fQuoteTotal = 0,
             fTaxTotal = 0,
             fCashTotal = 0;
@@ -1653,17 +1686,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             if (rec.type === "Quotation") fQuoteTotal += rec.amount;else if (rec.type === "TAX-INVOICE") fTaxTotal += rec.amount;else if (rec.type === "Cash Bill") fCashTotal += rec.amount;
           });
           const fOverallRevenue = fQuoteTotal + fTaxTotal + fCashTotal;
-
-          // Safe percentage string generation logic
-          const getPercentageString = fValue => {
-            if (fOverallRevenue === 0) return "0%";
-            return `${Math.min(100, Math.round(fValue / fOverallRevenue * 100))}%`;
-          };
-          const sQuoteWidth = getPercentageString(fQuoteTotal);
-          const sTaxWidth = getPercentageString(fTaxTotal);
-          const sCashWidth = getPercentageString(fCashTotal);
-
-          // Dynamic HTML template compilation injection layer
+          const getPercentageString = fValue => fOverallRevenue === 0 ? "0%" : `${Math.min(100, Math.round(fValue / fOverallRevenue * 100))}%`;
           oHtmlMetricsDashboard.setContent(`
                 <div style="font-family: Arial, sans-serif; padding: 5px; min-width: 360px; color: #333;">
                     <div style="margin-bottom: 8px; font-size: 13px; font-weight: bold; color: #555;">
@@ -1672,55 +1695,29 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
                     <div style="margin-bottom: 18px; font-size: 15px; font-weight: bold; color: #000; border-bottom: 2px solid #eee; padding-bottom: 6px;">
                         Gross Segment Volume: <span style="color: #0a6ed1;">Rs. ${formatINR(fOverallRevenue)}</span>
                     </div>
-                    
                     <div style="margin-bottom: 12px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; font-weight: bold;">
-                            <span>QUOTATIONS (Rs. ${formatINR(fQuoteTotal)})</span>
-                            <span>${sQuoteWidth}</span>
-                        </div>
-                        <div style="width: 100%; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
-                            <div style="width: ${sQuoteWidth}; background: #2b7d2b; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.3s ease;"></div>
-                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; font-weight: bold;"><span>QUOTATIONS (Rs. ${formatINR(fQuoteTotal)})</span><span>${getPercentageString(fQuoteTotal)}</span></div>
+                        <div style="width: 100%; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;"><div style="width: ${getPercentageString(fQuoteTotal)}; background: #2b7d2b; height: 100%;"></div></div>
                     </div>
-
                     <div style="margin-bottom: 12px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; font-weight: bold;">
-                            <span>TAX INVOICES (Rs. ${formatINR(fTaxTotal)})</span>
-                            <span>${sTaxWidth}</span>
-                        </div>
-                        <div style="width: 100%; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
-                            <div style="width: ${sTaxWidth}; background: #e67e22; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.3s ease;"></div>
-                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; font-weight: bold;"><span>TAX INVOICES (Rs. ${formatINR(fTaxTotal)})</span><span>${getPercentageString(fTaxTotal)}</span></div>
+                        <div style="width: 100%; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;"><div style="width: ${getPercentageString(fTaxTotal)}; background: #e67e22; height: 100%;"></div></div>
                     </div>
-
                     <div style="margin-bottom: 4px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; font-weight: bold;">
-                            <span>CASH BILLS (Rs. ${formatINR(fCashTotal)})</span>
-                            <span>${sCashWidth}</span>
-                        </div>
-                        <div style="width: 100%; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
-                            <div style="width: ${sCashWidth}; background: #d32f2f; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.3s ease;"></div>
-                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; font-weight: bold;"><span>CASH BILLS (Rs. ${formatINR(fCashTotal)})</span><span>${getPercentageString(fCashTotal)}</span></div>
+                        <div style="width: 100%; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;"><div style="width: ${getPercentageString(fCashTotal)}; background: #d32f2f; height: 100%;"></div></div>
                     </div>
                 </div>
             `);
         };
-
-        // CRITICAL CHANGE: Attach listeners AFTER the filter function is completely declared
         oYearSelect.attachChange(() => {
           fnFilterAndRefreshDashboard();
         });
         oMonthSelect.attachChange(() => {
           fnFilterAndRefreshDashboard();
         });
-
-        // Fire initial load execution map to paint statistics immediately upon load
         fnFilterAndRefreshDashboard();
-
-        // 6. Construct Primary Dialog Wrapper Overlay setup
         const oDialog = new Dialog({
-          title: "Business Revenue Analytics Dashboard",
-          type: "Standard",
           contentWidth: "420px",
           customHeader: new sap.m.Bar({
             contentLeft: [new sap.m.Title({
@@ -1738,18 +1735,18 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             items: [oFilterToolbar, oHtmlMetricsDashboard]
           }).addStyleClass("sapUiContentPadding")],
           buttons: [new sap.m.Button({
-            text: "Clear History",
-            icon: "sap-icon://delete",
-            type: "Negative",
-            press: () => {
-              this._clearAnalyticsCloudData(oDialog);
-            }
-          }), new sap.m.Button({
-            text: "Download Excel",
+            text: "Download Summary",
             icon: "sap-icon://excel-attachment",
             type: "Accept",
             press: () => {
               this._downloadAnalyticsExcel(aRecords);
+            }
+          }), new sap.m.Button({
+            text: "Clear History",
+            icon: "sap-icon://delete",
+            type: "Reject",
+            press: () => {
+              this._verifyAdminPasswordBeforeManage(oYearSelect.getSelectedKey(), oMonthSelect.getSelectedKey());
             }
           })],
           afterClose: () => {
@@ -1764,31 +1761,266 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       }
     },
     /**
-    * Converts the current cloud analytics logs into an Excel file and downloads it.
-    * @param {any[]} aRecords The raw array of billing logs fetched from the bin
+    * Formats data history logs and triggers a clean Excel spreadsheet export with localized Indian Standard Timestamps.
     */
     _downloadAnalyticsExcel: function _downloadAnalyticsExcel(aRecords) {
       if (!aRecords || aRecords.length === 0) {
         sap.m.MessageToast.show("No transaction records available to export.");
         return;
       }
-
-      // 1. Map the clean cloud fields to descriptive Excel columns
-      const aExcelRows = aRecords.map(rec => ({
-        "Document ID": rec.id,
-        "Document Type": rec.type,
-        "Client / Customer Name": rec.client,
-        "Grand Total (Rs.)": rec.amount,
-        "Generated Timestamp": rec.timestamp
-      }));
-
-      // 2. Build and export the spreadsheet using your existing XLSX library reference
+      const aExcelRows = aRecords.map(rec => {
+        let sFormattedIST = "";
+        if (rec.timestamp) {
+          const oDate = new Date(rec.timestamp);
+          const sDay = String(oDate.getDate()).padStart(2, '0');
+          const sMonth = String(oDate.getMonth() + 1).padStart(2, '0');
+          const sYear = oDate.getFullYear();
+          const sHours = String(oDate.getHours()).padStart(2, '0');
+          const sMins = String(oDate.getMinutes()).padStart(2, '0');
+          const sSecs = String(oDate.getSeconds()).padStart(2, '0');
+          sFormattedIST = `${sDay}-${sMonth}-${sYear} ${sHours}:${sMins}:${sSecs}`;
+        }
+        return {
+          "Document ID": rec.id,
+          "Document Type": rec.type,
+          "Client / Customer Name": rec.client,
+          "Grand Total (Rs.)": rec.amount,
+          "Date and Time (IST)": sFormattedIST
+        };
+      });
       const ws = XLSX.utils.json_to_sheet(aExcelRows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Revenue Overview");
       XLSX.writeFile(wb, "Business_Analytics_Summary.xlsx");
       sap.m.MessageToast.show("Analytics data exported to Excel successfully!");
     },
+    /**
+     * Step 1 (Multi-Step): Asks for authorization password. If valid, passes selected month/year filters to the table box.
+     */
+    _verifyAdminPasswordBeforeManage: function _verifyAdminPasswordBeforeManage(sTargetYear, sTargetMonth) {
+      const sMasterPassword = "clearMe@22";
+      const oPasswordInput = new sap.m.Input({
+        type: sap.m.InputType.Password,
+        placeholder: "Enter admin password to manage records",
+        width: "100%"
+      });
+      const oSecurityDialog = new Dialog({
+        title: "Security Verification",
+        type: "Message",
+        state: "Warning",
+        content: [new sap.m.Text({
+          text: "Please enter the master administrative password to open log data erasure management:"
+        }), oPasswordInput],
+        beginButton: new sap.m.Button({
+          text: "Verify",
+          type: "Accept",
+          press: () => {
+            if (oPasswordInput.getValue() !== sMasterPassword) {
+              sap.m.MessageBox.error("Authentication Failed! Access denied.");
+              oPasswordInput.setValue("");
+              return;
+            }
+            oSecurityDialog.close();
+            this._openGranularDeletionWorkspace(sTargetYear, sTargetMonth);
+          }
+        }),
+        endButton: new sap.m.Button({
+          text: "Abort",
+          press: () => oSecurityDialog.close()
+        }),
+        afterClose: () => oSecurityDialog.destroy()
+      });
+      oSecurityDialog.open();
+    },
+    /**
+     * Step 2 (Multi-Step): Displays checkboxes table showing ONLY the entries matching the active Month/Year filter.
+     * Injects formatted Indian Standard Time strings directly into the data matrix row templates.
+     */
+    _openGranularDeletionWorkspace: async function _openGranularDeletionWorkspace(sTargetYear, sTargetMonth) {
+      sap.ui.core.BusyIndicator.show(0);
+      try {
+        const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}/latest`, {
+          method: "GET",
+          headers: {
+            "X-Master-Key": this.sMasterKey
+          }
+        });
+        if (!response.ok) throw new Error("Could not retrieve current cloud logs.");
+        const result = await response.json();
+        const aMasterRecords = result.record.records || [];
+
+        // Filter records based on selected dropdown keys
+        const aFilteredRecords = aMasterRecords.filter(rec => {
+          const oDate = new Date(rec.timestamp);
+          const aMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          const sRowYear = rec.year || oDate.getFullYear().toString();
+          const sRowMonth = rec.month || aMonths[oDate.getMonth()];
+          return (sTargetYear === "ALL" || sRowYear === sTargetYear) && (sTargetMonth === "ALL" || sRowMonth === sTargetMonth);
+        });
+
+        // Loop through and append formatted IST strings to each record item
+        const aFormattedTableItems = aFilteredRecords.map(rec => {
+          let sFormattedIST = "";
+          if (rec.timestamp) {
+            const oDate = new Date(rec.timestamp);
+            const sDay = String(oDate.getDate()).padStart(2, '0');
+            const sMonth = String(oDate.getMonth() + 1).padStart(2, '0');
+            const sYear = oDate.getFullYear();
+            const sHours = String(oDate.getHours()).padStart(2, '0');
+            const sMins = String(oDate.getMinutes()).padStart(2, '0');
+            const sSecs = String(oDate.getSeconds()).padStart(2, '0');
+            sFormattedIST = `${sDay}-${sMonth}-${sYear} ${sHours}:${sMins}:${sSecs}`;
+          }
+          return Object.assign({}, rec, {
+            displayTimestamp: sFormattedIST
+          });
+        });
+        const oSelectionModel = new sap.ui.model.json.JSONModel({
+          items: aFormattedTableItems
+        });
+        const oDeleteTable = new sap.m.Table({
+          mode: sap.m.ListMode.MultiSelect,
+          noDataText: "No operational tracking records found for this segment selection",
+          columns: [new sap.m.Column({
+            header: new sap.m.Label({
+              text: "Document ID",
+              design: "Bold"
+            }),
+            width: "25%"
+          }), new sap.m.Column({
+            header: new sap.m.Label({
+              text: "Type",
+              design: "Bold"
+            }),
+            width: "20%"
+          }), new sap.m.Column({
+            header: new sap.m.Label({
+              text: "Date & Time (IST)",
+              design: "Bold"
+            }),
+            width: "35%"
+          }), new sap.m.Column({
+            header: new sap.m.Label({
+              text: "Amount",
+              design: "Bold"
+            }),
+            width: "20%",
+            hAlign: "Right"
+          })]
+        });
+        oDeleteTable.bindItems({
+          path: "/items",
+          template: new sap.m.ColumnListItem({
+            cells: [new sap.m.Text({
+              text: "{id}"
+            }), new sap.m.Text({
+              text: "{type}"
+            }), new sap.m.Text({
+              text: "{displayTimestamp}"
+            }), new sap.m.Text({
+              text: {
+                path: "amount",
+                formatter: val => formatINR(val)
+              }
+            })]
+          })
+        });
+        oDeleteTable.setModel(oSelectionModel);
+        const oWipeDialog = new Dialog({
+          title: `Manage Segment: ${sTargetMonth}-${sTargetYear}`,
+          contentWidth: "520px",
+          contentHeight: "450px",
+          content: [new sap.m.VBox({
+            items: [new sap.m.Text({
+              text: "Check individual row boxes below, then click permanently clear to execute data exclusion operations:"
+            }).addStyleClass("sapUiSmallMarginBottom"), oDeleteTable]
+          }).addStyleClass("sapUiContentPadding")],
+          buttons: [new sap.m.Button({
+            text: "Permanently Clear Selected",
+            icon: "sap-icon://delete",
+            type: "Reject",
+            press: () => {
+              const aSelectedUIItems = oDeleteTable.getSelectedItems();
+              if (aSelectedUIItems.length === 0) {
+                sap.m.MessageToast.show("Please check at least one line row item.");
+                return;
+              }
+              this._executeCloudArrayWipe(aSelectedUIItems, aMasterRecords, oWipeDialog);
+            }
+          }), new sap.m.Button({
+            text: "Cancel / Exit",
+            press: () => oWipeDialog.close()
+          })],
+          afterClose: () => oWipeDialog.destroy()
+        });
+        oWipeDialog.open();
+      } catch (err) {
+        sap.m.MessageBox.error(`Failed to initialize clearance management table context: ${err.message}`);
+      } finally {
+        sap.ui.core.BusyIndicator.hide();
+      }
+    },
+    /**
+     * Phase 3 (Multi-Step): Slices targets, cleans array maps, and sends final configuration dataset back to jsonbin.
+     * @param {any[]} aSelectedUIItems Checked row layout objects from the sap.m.Table
+     * @param {any[]} aMasterRecords Full database history array downloaded from the cloud bin
+     * @param {sap.m.Dialog} oWipeDialog Reference to close the selection manager dialog window upon successful database sync
+     */
+    _executeCloudArrayWipe: async function _executeCloudArrayWipe(aSelectedUIItems, aMasterRecords, oWipeDialog) {
+      sap.ui.core.BusyIndicator.show(0);
+      try {
+        // 1. Map selected rows to match text ID properties from binding contexts
+        const aTargetIdsToDelete = aSelectedUIItems.map(oItem => {
+          return oItem.getBindingContext().getProperty("id");
+        });
+
+        // 2. Clean array list to omit target matches
+        const aCleanedRecords = aMasterRecords.filter(rec => !aTargetIdsToDelete.includes(rec.id));
+
+        // 3. Commit the cleaned array straight back up to your cloud repository container
+        const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Master-Key": this.sMasterKey
+          },
+          body: JSON.stringify({
+            records: aCleanedRecords
+          })
+        });
+        if (!response.ok) throw new Error("Cloud sync write session parameters rejected entry clearance updates.");
+        sap.m.MessageToast.show(`Successfully erased ${aTargetIdsToDelete.length} logged record entries from cloud repository.`);
+        oWipeDialog.close(); // Close deletion window shell context layout cleanly
+      } catch (err) {
+        sap.m.MessageBox.error(`Wipe Transaction Error: ${err.message || err}`);
+      } finally {
+        sap.ui.core.BusyIndicator.hide();
+      }
+    },
+    /**
+    * Converts the current cloud analytics logs into an Excel file and downloads it.
+    * @param {any[]} aRecords The raw array of billing logs fetched from the bin
+    */
+    // private _downloadAnalyticsExcel(aRecords: any[]): void {
+    //     if (!aRecords || aRecords.length === 0) {
+    //         sap.m.MessageToast.show("No transaction records available to export.");
+    //         return;
+    //     }
+    //     // 1. Map the clean cloud fields to descriptive Excel columns
+    //     const aExcelRows = aRecords.map((rec: any) => ({
+    //         "Document ID": rec.id,
+    //         "Document Type": rec.type,
+    //         "Client / Customer Name": rec.client,
+    //         "Grand Total (Rs.)": rec.amount,
+    //         "Generated Timestamp": rec.timestamp
+    //     }));
+    //     // 2. Build and export the spreadsheet using your existing XLSX library reference
+    //     const ws = XLSX.utils.json_to_sheet(aExcelRows);
+    //     const wb = XLSX.utils.book_new();
+    //     XLSX.utils.book_append_sheet(wb, ws, "Revenue Overview");
+    //     XLSX.writeFile(wb, "Business_Analytics_Summary.xlsx");
+    //     sap.m.MessageToast.show("Analytics data exported to Excel successfully!");
+    // }
     // /**
     //  * Wipes out all historical transactions inside the dedicated analytics cloud bin.
     /**
