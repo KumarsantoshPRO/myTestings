@@ -18,6 +18,7 @@ import ColumnListItem from "sap/m/ColumnListItem";
 import DateFormat from "sap/ui/core/format/DateFormat";
 import BusyIndicator from "sap/ui/core/BusyIndicator";
 
+
 declare var jspdf: any;
 declare var sap: any;
 declare var XLSX: any;
@@ -38,6 +39,8 @@ export default class View extends Controller {
     private sSignaturBase64: string = "";
     private sStorageKey: string = "my_billing_app_draft_data";
     private sSequenceKey: string = "my_billing_app_invoice_seq_counter";
+    // Centralized Cloud Analytics Configuration
+    private sAnalyticsBinId: string = "6a1015ed6877513b27b3681c";
 
     // Storage Keys for Custom Template Tracking
     private sCustomNumKey: string = "my_billing_app_custom_numeric_seq";
@@ -332,6 +335,10 @@ export default class View extends Controller {
     }
 
     public onGeneratePDF(): void {
+        this.onSaveLocalStorage();
+
+
+
         const jspdfLib = (window as any).jspdf;
         if (!jspdfLib) return;
 
@@ -431,6 +438,10 @@ export default class View extends Controller {
 
         this.onExcelDownload(null, "Quotation");
         this.onGenerateWord("Quotation");
+
+
+        const sClient = this._getFirstLineName(oHeader.To);
+        this._logDocumentAnalytics("Quotation", sTargetFilename, sClient, grandTotal);
     }
 
     public onTaxAddRow(): void {
@@ -476,6 +487,7 @@ export default class View extends Controller {
     }
 
     public onTaxInvoicePDF(): void {
+        this.onSaveLocalStorage();
         const jspdfLib = (window as any).jspdf;
         if (!jspdfLib) return;
         const oModel = this.getView()?.getModel() as JSONModel;
@@ -566,6 +578,9 @@ export default class View extends Controller {
 
         this.onExcelDownload(null, "TAX-INVOICE");
         this.onGenerateWord("TAX-INVOICE");
+
+        const sClient = this._getFirstLineName(oData.taxHeader.To);
+        this._logDocumentAnalytics("TAX-INVOICE", oData.taxHeader.InvoiceNo, sClient, grandTotal);
     }
 
     public onCashAddRow(): void {
@@ -595,6 +610,7 @@ export default class View extends Controller {
     }
 
     public onCashBillPDF(): void {
+        this.onSaveLocalStorage();
         const jspdfLib = (window as any).jspdf;
         if (!jspdfLib) return;
         const oModel = this.getView()?.getModel() as JSONModel;
@@ -668,6 +684,8 @@ export default class View extends Controller {
 
         this.onExcelDownload(null, "Cash Bill");
         this.onGenerateWord("Cash Bill");
+        const sClient = this._getFirstLineName(oData.cashHeader.cashTo);
+        this._logDocumentAnalytics("Cash Bill", sTargetFilename, sClient, totalAmount);
     }
 
     public onExcelDownload(oEvent: any, sOverrideMode?: string): void {
@@ -1109,4 +1127,241 @@ export default class View extends Controller {
             MessageToast.show("Word document successfully downloaded from template mapping!");
         } catch (error: any) { MessageBox.error("Error filling out document template: " + error.message); }
     }
+
+    /**
+ * Asynchronously captures basic billing metrics and posts them to the dedicated analytics bin
+ * @param {string} sDocType The category of document ("Quotation" | "TAX-INVOICE" | "Cash Bill")
+ * @param {string} sDocNo Generated identification string
+ * @param {string} sClient Target client name
+ * @param {number} fAmount Grand total invoice revenue
+ */
+    private async _logDocumentAnalytics(sDocType: string, sDocNo: string, sClient: string, fAmount: number): Promise<void> {
+        try {
+            // 1. Fetch the existing collection matrix from the cloud bin
+            const oGetResponse = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}/latest`, {
+                method: "GET",
+                headers: { "X-Master-Key": this.sMasterKey }
+            });
+            if (!oGetResponse.ok) throw new Error("Failed to read analytical historical logs.");
+            const oGetResult = await oGetResponse.json();
+            const aHistory = oGetResult.record.records || [];
+
+            // 2. Append the new structured transaction item details
+            aHistory.push({
+                id: sDocNo,
+                type: sDocType,
+                client: sClient,
+                amount: fAmount,
+                timestamp: new Date().toISOString()
+            });
+
+            // 3. Commit the updated history collection block back to your cloud data container
+            await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Master-Key": this.sMasterKey
+                },
+                body: JSON.stringify({ records: aHistory })
+            });
+        } catch (oError) {
+            console.error("Background analytical tracking logging engine failed: ", oError);
+        }
+    }
+
+    /**
+ * Fetches analytical data sets from the cloud database and presents aggregates natively in a UI Dialog
+ */
+    /**
+ * Fetches analytical transaction logs from your cloud database bin and presents
+ * a clear, real-time analytics bar dashboard using standard core layout matrix elements.
+ */
+    public async onShowAnalyticsGraph(): Promise<void> {
+        sap.ui.core.BusyIndicator.show(0);
+
+        try {
+            // 1. Fetch historical record arrays from your separate analytics bin container
+            const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}/latest`, {
+                method: "GET",
+                headers: { "X-Master-Key": this.sMasterKey }
+            });
+            if (!response.ok) throw new Error("Could not retrieve analytical transaction entries.");
+
+            const result = await response.json();
+            const aRecords = result.record.records || [];
+
+            // 2. Aggregate sums dynamically by document groupings
+            let fQuoteTotal = 0, fTaxTotal = 0, fCashTotal = 0;
+            aRecords.forEach((rec: any) => {
+                if (rec.type === "Quotation") fQuoteTotal += rec.amount;
+                else if (rec.type === "TAX-INVOICE") fTaxTotal += rec.amount;
+                else if (rec.type === "Cash Bill") fCashTotal += rec.amount;
+            });
+
+            const fOverallRevenue = fQuoteTotal + fTaxTotal + fCashTotal;
+
+            // Calculate responsive percentage metrics for visual distribution bar matching
+            const getPercentageString = (fValue: number): string => {
+                if (fOverallRevenue === 0) return "0%";
+                return `${Math.min(100, Math.round((fValue / fOverallRevenue) * 100))}%`;
+            };
+
+            const sQuoteWidth = getPercentageString(fQuoteTotal);
+            const sTaxWidth = getPercentageString(fTaxTotal);
+            const sCashWidth = getPercentageString(fCashTotal);
+
+            // 3. Create a Custom Visual Dashboard Layout Panel via HTML5 Injection
+            const oHtmlMetricsDashboard = new sap.ui.core.HTML({
+                content: `
+                <div style="font-family: Arial, sans-serif; padding: 10px; min-width: 320px; color: #333;">
+                    <div style="margin-bottom: 8px; font-size: 13px; font-weight: bold; color: #555;">
+                        Total Logged Operations: <span style="color: #2b7d2b;">${aRecords.length} Documents</span>
+                    </div>
+                    <div style="margin-bottom: 18px; font-size: 15px; font-weight: bold; color: #000; border-bottom: 2px solid #eee; padding-bottom: 6px;">
+                        Gross Business Volume: <span style="color: #0a6ed1;">Rs. ${formatINR(fOverallRevenue)}</span>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; font-weight: bold;">
+                            <span>QUOTATIONS (Rs. ${formatINR(fQuoteTotal)})</span>
+                            <span>${sQuoteWidth}</span>
+                        </div>
+                        <div style="width: 100%; bg-color: #eee; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
+                            <div style="width: ${sQuoteWidth}; background: #2b7d2b; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.4s ease;"></div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; font-weight: bold;">
+                            <span>TAX INVOICES (Rs. ${formatINR(fTaxTotal)})</span>
+                            <span>${sTaxWidth}</span>
+                        </div>
+                        <div style="width: 100%; bg-color: #eee; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
+                            <div style="width: ${sTaxWidth}; background: #e67e22; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.4s ease;"></div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 4px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; font-weight: bold;">
+                            <span>CASH BILLS (Rs. ${formatINR(fCashTotal)})</span>
+                            <span>${sCashWidth}</span>
+                        </div>
+                        <div style="width: 100%; bg-color: #eee; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
+                            <div style="width: ${sCashWidth}; background: #d32f2f; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.4s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+            `
+            });
+
+            // 4. Construct Dialog Popup Overlay container
+            const oDialog = new Dialog({
+                title: "Business Revenue Analytics Dashboard",
+                type: "Message",
+                contentWidth: "420px",
+                content: [oHtmlMetricsDashboard],
+                buttons: [
+                    // Button 1: Excel Data Downloader
+                    new sap.m.Button({
+                        icon: "sap-icon://excel-attachment",
+                        type: "Accept", // Gives it a professional green highlight matching Excel styling
+                        press: () => {
+                            this._downloadAnalyticsExcel(aRecords);
+                        }
+                    }),
+                    // Button 2: Cloud Storage Wiper
+                    new sap.m.Button({
+                        text: "Clear History",
+                        icon: "sap-icon://delete",
+                        type: "Negative", // Gives it a red warning highlight
+                        press: () => {
+                            this._clearAnalyticsCloudData(oDialog);
+                        }
+                    }),
+                    // Original Exit Button
+                    new sap.m.Button({
+                        type: "Reject",
+                        icon: "sap-icon://decline",
+                        press: () => {
+                            oDialog.close();
+                        }
+                    })
+                ],
+                afterClose: () => {
+                    oDialog.destroy();
+                }
+            });
+
+            oDialog.open();
+
+        } catch (err: any) {
+            sap.m.MessageBox.error(`Analytics Visualization Fault: ${err.message || err}`);
+        } finally {
+            sap.ui.core.BusyIndicator.hide();
+        }
+    }
+
+    /**
+ * Converts the current cloud analytics logs into an Excel file and downloads it.
+ * @param {any[]} aRecords The raw array of billing logs fetched from the bin
+ */
+    private _downloadAnalyticsExcel(aRecords: any[]): void {
+        if (!aRecords || aRecords.length === 0) {
+            sap.m.MessageToast.show("No transaction records available to export.");
+            return;
+        }
+
+        // 1. Map the clean cloud fields to descriptive Excel columns
+        const aExcelRows = aRecords.map((rec: any) => ({
+            "Document ID": rec.id,
+            "Document Type": rec.type,
+            "Client / Customer Name": rec.client,
+            "Grand Total (Rs.)": rec.amount,
+            "Generated Timestamp": rec.timestamp
+        }));
+
+        // 2. Build and export the spreadsheet using your existing XLSX library reference
+        const ws = XLSX.utils.json_to_sheet(aExcelRows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Revenue Overview");
+
+        XLSX.writeFile(wb, "Business_Analytics_Summary.xlsx");
+        sap.m.MessageToast.show("Analytics data exported to Excel successfully!");
+    }
+
+    // /**
+    //  * Wipes out all historical transactions inside the dedicated analytics cloud bin.
+    //  * @param {sap.m.Dialog} oDialog Reference to the open dialog so we can close it upon reset
+    //  */
+    private _clearAnalyticsCloudData(oDialog: Dialog): void {
+        sap.m.MessageBox.confirm("Are you sure you want to permanently delete all cloud analytics history? This cannot be undone.", {
+            actions: [sap.m.MessageBox.Action.YES, sap.m.MessageBox.Action.NO],
+            onClose: async (sAction: string | null) => {
+                if (sAction === sap.m.MessageBox.Action.YES) {
+                    sap.ui.core.BusyIndicator.show(0);
+                    try {
+                        // Reset the cloud bin back to an empty records array
+                        const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "X-Master-Key": this.sMasterKey
+                            },
+                            body: JSON.stringify({ records: [] })
+                        });
+
+                        if (!response.ok) throw new Error("Cloud database rejected the wipe request.");
+
+                        sap.m.MessageToast.show("Analytics history successfully cleared from the cloud!");
+                        oDialog.close(); // Close the dashboard overlay cleanly
+                    } catch (err: any) {
+                        sap.m.MessageBox.error(`Clear Operational Fault: ${err.message}`);
+                    } finally {
+                        sap.ui.core.BusyIndicator.hide();
+                    }
+                }
+            }
+        });
+    }
+
 }
