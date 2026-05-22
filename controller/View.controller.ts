@@ -22,6 +22,8 @@ import IconPool from "sap/ui/core/IconPool";
 declare var jspdf: any;
 declare var sap: any;
 declare var XLSX: any; // External SheetJS Library Reference
+declare var sap: any;
+declare var window: any; // Ensure window is accessible if needed
 
 const formatINR = (amount: number | string): string => {
     const value = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -436,6 +438,7 @@ export default class View extends Controller {
 
         // Also trigger the matching Excel download
         this.onExcelDownload(null, "Quotation");
+        this.onGenerateWord("Quotation");
     }
 
     public onTaxAddRow(): void {
@@ -571,6 +574,9 @@ export default class View extends Controller {
 
         // Also trigger the matching Excel download
         this.onExcelDownload(null, "TAX-INVOICE");
+
+        this.onGenerateWord("TAX-INVOICE");
+
     }
 
     public onCashAddRow(): void {
@@ -675,6 +681,9 @@ export default class View extends Controller {
 
         // Also trigger the matching Excel download
         this.onExcelDownload(null, "Cash Bill");
+         this.onGenerateWord( "Cash Bill");
+
+
     }
 
     public onExcelDownload(oEvent: any, sOverrideMode?: string): void {
@@ -961,9 +970,7 @@ export default class View extends Controller {
         oBinding.filter([oCombinedFilter]);
     }
 
-    /**
-     * Triggered when a row is selected or clicked
-     */
+
     public onHSNValueHelpConfirm(oEvent: TableSelectDialog$ConfirmEvent): void {
         const oSelectedItem = oEvent.getParameter("selectedItem");
         const oInput = this.getView()?.data("valueHelpSourceInput") as Input;
@@ -983,11 +990,7 @@ export default class View extends Controller {
 
 
     }
-    /**
-     * Extracts model info depending on selected visibility context mode,
-     * scans the text for a mobile number to automatically pre-fill the input,
-     * and opens the WhatsApp interface on confirmation.
-     */
+
     public async onShareToWhatsApp(): Promise<void> {
         const oView = this.getView();
         if (!oView) return;
@@ -1190,5 +1193,149 @@ export default class View extends Controller {
         }
     }
 
+    public async onGenerateWord(sMode: string): Promise<void> {
+        // 1. Asynchronously initialize the browser-compatible docxtemplater and PizZip bundles
+        if (!(window as any).docxtemplater) {
+            try {
+                await new Promise<void>((resolve, reject) => {
+                    const scriptZip = document.createElement("script");
+                    scriptZip.src = "https://cdn.jsdelivr.net/npm/pizzip@3.1.4/dist/pizzip.min.js";
+                    scriptZip.onload = () => {
+                        const scriptDocx = document.createElement("script");
+                        scriptDocx.src = "https://cdn.jsdelivr.net/npm/docxtemplater@3.45.0/build/docxtemplater.js";
+                        scriptDocx.onload = () => resolve();
+                        scriptDocx.onerror = (err) => reject(err);
+                        document.head.appendChild(scriptDocx);
+                    };
+                    scriptZip.onerror = (err) => reject(err);
+                    document.head.appendChild(scriptZip);
+                });
+            } catch (error) {
+                MessageBox.error("Failed to dynamically load client-side template engines.");
+                return;
+            }
+        }
+
+        const PizZip = (window as any).PizZip;
+        const Docxtemplater = (window as any).docxtemplater;
+        const oModel = this.getView()?.getModel() as JSONModel;
+        const oData = oModel.getData();
+
+        let sTemplatePath = "";
+        let sTargetFilename = "";
+        let oTemplateDataMap: any = {};
+
+        // 2. Map dataset payloads dynamically based on visibility modes
+        if (sMode === "Quotation") {
+            sTemplatePath = "my/app/generatebill/model/Quotation_Template.docx";
+            sTargetFilename = this._getFirstLineName(oData.header.To) + "_Quotation.docx";
+
+            const subtotal = oData.products.reduce((acc: number, cur: any) => acc + parseFloat(cur.total || 0), 0);
+            const gstAmount = subtotal * 0.18;
+            oTemplateDataMap = {
+                To: oData.header.To,
+                Date: oData.header.Date,
+                Subject: oData.header.Subject,
+                AdditionalInfo: oData.header.AddtionalInfo,
+                prds: oData.products.map((item: any, idx: number) => ({
+                    i: idx + 1,
+                    productName: item.productName,
+                    quantity: item.quantity,
+                    price: item.price,
+                    symbol: item.symbol,
+                    total: formatINR(item.total)
+                })),
+                gstAmount: formatINR(gstAmount),
+                grandTotal: formatINR(oModel.getProperty("/totalSum")),
+                Notes: oData.header.Notes,
+                TermsAndConditions: oData.header.TermsAndConditions
+            };
+        } else if (sMode === "TAX-INVOICE") {
+            sTemplatePath = "my/app/generatebill/model/TaxInvoice_Template.docx";
+            sTargetFilename = this._getFirstLineName(oData.taxHeader.To) + "_TaxInvoice.docx";
+
+            const totalAmount = oData.taxProducts.reduce((sum: number, item: any) => sum + parseFloat(item.taxTotal), 0);
+            const taxVal = totalAmount * 0.09;
+            const grandTotal = totalAmount + (taxVal * 2);
+
+            oTemplateDataMap = {
+                To: oData.taxHeader.To,
+                InvoiceNo: oData.taxHeader.InvoiceNo,
+                Date: oData.taxHeader.Date,
+                PONo: oData.taxHeader.PONo,
+                PODate: oData.taxHeader.PODate,
+                taxPrd: oData.taxProducts.map((item: any, idx: number) => ({
+                    in: idx + 1,
+                    taxPart: item.taxpProductName,
+                    taxHSN: item.taxHSNCode,
+                    taxP: formatINR(item.taxPrice),
+                    taxS: item.taxSymbol,
+                    taxQ: item.taxQuantity,
+                    taxT: formatINR(item.taxTotal)
+                })),
+                total: formatINR(totalAmount),
+                cgst: formatINR(taxVal),
+                sgst: formatINR(taxVal),
+                grandTotal: formatINR(grandTotal),
+                words: this.numberToWords(grandTotal),
+                PartyGST: oData.taxHeader.PartyGST
+            };
+        } else {
+            sTemplatePath = "my/app/generatebill/model/CashBill_Template.docx";
+            sTargetFilename = this._getFirstLineName(oData.cashHeader.cashTo) + "_CashBill.docx";
+
+            const totalAmount = oData.cashProducts.reduce((sum: number, item: any) => sum + parseFloat(item.cashAmount || 0), 0);
+
+            oTemplateDataMap = {
+                cashTo: oData.cashHeader.cashTo,
+                cashDate: oData.cashHeader.cashDate,
+                cP: oData.cashProducts.map((item: any, idx: number) => ({
+                    i: idx + 1,
+                    cashBody: item.cashBody,
+                    cashQuantity: item.cashQuantity,
+                    cashAmount: formatINR(item.cashAmount)
+                })),
+                cashTotalSum: formatINR(totalAmount),
+                words: this.numberToWords(totalAmount)
+            };
+        }
+
+        try {
+            // 3. Load the template binary from your webapp model layer via XMLHttpRequest
+            const sTemplateUrl = sap.ui.require.toUrl(sTemplatePath);
+            const response = await fetch(sTemplateUrl);
+            if (!response.ok) throw new Error("Could not fetch the specified Word template.");
+
+            const arrayBuffer = await response.arrayBuffer();
+            const zip = new PizZip(arrayBuffer);
+
+            // 4. Initialize docxtemplater on the loaded archive context
+            const doc = new Docxtemplater(zip, {
+                paragraphLoop: true,
+                linebreaks: true
+            });
+
+            // 5. Render fields dynamically
+            doc.setData(oTemplateDataMap);
+            doc.render();
+
+            // 6. Extract the document blob stream and trigger instant browser download
+            const outBlob = doc.getZip().generate({
+                type: "blob",
+                mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            });
+
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(outBlob);
+            link.download = sTargetFilename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            MessageToast.show("Word document successfully downloaded from template mapping!");
+        } catch (error: any) {
+            MessageBox.error("Error filling out document template: " + error.message);
+        }
+    }
 
 }

@@ -610,7 +610,7 @@
                     icon="sap-icon://document"
                     text="Export MS Word"
                     type="Accept"
-                    press=".onExportToMSWord"
+                    press=".onGenerateWord"
                     visible="false"
                 />
                 <Button
