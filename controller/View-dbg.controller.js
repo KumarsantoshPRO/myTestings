@@ -1720,18 +1720,24 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         // 6. Construct Primary Dialog Wrapper Overlay setup
         const oDialog = new Dialog({
           title: "Business Revenue Analytics Dashboard",
-          type: "Message",
+          type: "Standard",
           contentWidth: "420px",
+          customHeader: new sap.m.Bar({
+            contentLeft: [new sap.m.Title({
+              text: "Business Revenue Analytics Dashboard"
+            })],
+            contentRight: [new sap.m.Button({
+              icon: "sap-icon://decline",
+              type: "Transparent",
+              press: () => {
+                oDialog.close();
+              }
+            })]
+          }),
           content: [new sap.m.VBox({
             items: [oFilterToolbar, oHtmlMetricsDashboard]
           }).addStyleClass("sapUiContentPadding")],
           buttons: [new sap.m.Button({
-            icon: "sap-icon://excel-attachment",
-            type: "Accept",
-            press: () => {
-              this._downloadAnalyticsExcel(aRecords);
-            }
-          }), new sap.m.Button({
             text: "Clear History",
             icon: "sap-icon://delete",
             type: "Negative",
@@ -1739,10 +1745,11 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               this._clearAnalyticsCloudData(oDialog);
             }
           }), new sap.m.Button({
-            icon: "sap-icon://decline",
-            type: "Reject",
+            text: "Download Excel",
+            icon: "sap-icon://excel-attachment",
+            type: "Accept",
             press: () => {
-              oDialog.close();
+              this._downloadAnalyticsExcel(aRecords);
             }
           })],
           afterClose: () => {
