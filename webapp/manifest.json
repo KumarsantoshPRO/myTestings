@@ -51,6 +51,10 @@
         "settings": {
           "bundleName": "my.app.generatebill.i18n.i18n"
         }
+      },
+      "hsnModel": {
+        "type": "sap.ui.model.json.JSONModel",
+        "uri": "model/HSN_SAC.json"
       }
     },
     "resources": {
