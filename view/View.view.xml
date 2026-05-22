@@ -19,6 +19,7 @@
                     icon="sap-icon://bar-chart"
                     press="onShowAnalyticsGraph"
                     type="Emphasized"
+                    
                 />
                 <Text text="GST No: 29AGKPP7288F1Z0" />
 

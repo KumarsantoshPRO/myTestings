@@ -1538,12 +1538,18 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         const aHistory = oGetResult.record.records || [];
 
         // 2. Append the new structured transaction item details
+        // Inside your _logDocumentAnalytics method, enhance the object pushed to aHistory:
+        const oDate = new Date();
+        const aMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         aHistory.push({
           id: sDocNo,
           type: sDocType,
           client: sClient,
           amount: fAmount,
-          timestamp: new Date().toISOString()
+          timestamp: oDate.toISOString(),
+          month: aMonths[oDate.getMonth()],
+          // Stores e.g., "May"
+          year: oDate.getFullYear().toString() // Stores e.g., "2026"
         });
 
         // 3. Commit the updated history collection block back to your cloud data container
@@ -1562,12 +1568,9 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       }
     },
     /**
-    * Fetches analytical data sets from the cloud database and presents aggregates natively in a UI Dialog
-    */
-    /**
-    * Fetches analytical transaction logs from your cloud database bin and presents
-    * a clear, real-time analytics bar dashboard using standard core layout matrix elements.
-    */
+     * Fetches analytical transaction logs from your cloud database bin and presents
+     * an interactive, filterable analytics dashboard with rolling dynamic year filters.
+     */
     onShowAnalyticsGraph: async function _onShowAnalyticsGraph() {
       sap.ui.core.BusyIndicator.show(0);
       try {
@@ -1582,33 +1585,92 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         const result = await response.json();
         const aRecords = result.record.records || [];
 
-        // 2. Aggregate sums dynamically by document groupings
-        let fQuoteTotal = 0,
-          fTaxTotal = 0,
-          fCashTotal = 0;
-        aRecords.forEach(rec => {
-          if (rec.type === "Quotation") fQuoteTotal += rec.amount;else if (rec.type === "TAX-INVOICE") fTaxTotal += rec.amount;else if (rec.type === "Cash Bill") fCashTotal += rec.amount;
+        // 2. Initialize the dynamic UI container wrappers
+        const oHtmlMetricsDashboard = new sap.ui.core.HTML();
+
+        // 3. Calculate rolling calendar year strings dynamically (Current Year, -1, -2)
+        const iCurrentYear = new Date().getFullYear();
+        const sYearCurrent = iCurrentYear.toString();
+        const sYearMinus1 = (iCurrentYear - 1).toString();
+        const sYearMinus2 = (iCurrentYear - 2).toString();
+
+        // 4. Define responsive dropdown selectors for Year and Month filtering
+        const oYearSelect = new sap.m.Select({
+          selectedKey: sYearCurrent,
+          // Defaults to current year string
+          items: [new sap.ui.core.Item({
+            key: "ALL",
+            text: "All Years"
+          }), new sap.ui.core.Item({
+            key: sYearMinus2,
+            text: sYearMinus2
+          }), new sap.ui.core.Item({
+            key: sYearMinus1,
+            text: sYearMinus1
+          }), new sap.ui.core.Item({
+            key: sYearCurrent,
+            text: `${sYearCurrent} (Current Year)`
+          })]
         });
-        const fOverallRevenue = fQuoteTotal + fTaxTotal + fCashTotal;
+        const oMonthSelect = new sap.m.Select({
+          selectedKey: "ALL",
+          // Defaults to all months string
+          items: [new sap.ui.core.Item({
+            key: "ALL",
+            text: "All Months"
+          }), ...["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map(sM => new sap.ui.core.Item({
+            key: sM,
+            text: sM
+          }))]
+        });
+        const oFilterToolbar = new sap.m.HBox({
+          width: "100%",
+          justifyContent: "SpaceBetween",
+          items: [oYearSelect, oMonthSelect]
+        }).addStyleClass("sapUiSmallMarginBottom");
 
-        // Calculate responsive percentage metrics for visual distribution bar matching
-        const getPercentageString = fValue => {
-          if (fOverallRevenue === 0) return "0%";
-          return `${Math.min(100, Math.round(fValue / fOverallRevenue * 100))}%`;
-        };
-        const sQuoteWidth = getPercentageString(fQuoteTotal);
-        const sTaxWidth = getPercentageString(fTaxTotal);
-        const sCashWidth = getPercentageString(fCashTotal);
+        // 5. Core calculation engine loop to process dropdown selections reactively
+        const fnFilterAndRefreshDashboard = () => {
+          const sSelYear = oYearSelect.getSelectedKey();
+          const sSelMonth = oMonthSelect.getSelectedKey();
 
-        // 3. Create a Custom Visual Dashboard Layout Panel via HTML5 Injection
-        const oHtmlMetricsDashboard = new sap.ui.core.HTML({
-          content: `
-                <div style="font-family: Arial, sans-serif; padding: 10px; min-width: 320px; color: #333;">
+          // Filter dataset entries matching selected filter keys
+          const aFiltered = aRecords.filter(rec => {
+            const oDate = new Date(rec.timestamp);
+            const aMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const sRowYear = rec.year || oDate.getFullYear().toString();
+            const sRowMonth = rec.month || aMonths[oDate.getMonth()];
+            const bYearMatch = sSelYear === "ALL" || sRowYear === sSelYear;
+            const bMonthMatch = sSelMonth === "ALL" || sRowMonth === sSelMonth;
+            return bYearMatch && bMonthMatch;
+          });
+
+          // Calculate aggregated numeric totals
+          let fQuoteTotal = 0,
+            fTaxTotal = 0,
+            fCashTotal = 0;
+          aFiltered.forEach(rec => {
+            if (rec.type === "Quotation") fQuoteTotal += rec.amount;else if (rec.type === "TAX-INVOICE") fTaxTotal += rec.amount;else if (rec.type === "Cash Bill") fCashTotal += rec.amount;
+          });
+          const fOverallRevenue = fQuoteTotal + fTaxTotal + fCashTotal;
+
+          // Safe percentage string generation logic
+          const getPercentageString = fValue => {
+            if (fOverallRevenue === 0) return "0%";
+            return `${Math.min(100, Math.round(fValue / fOverallRevenue * 100))}%`;
+          };
+          const sQuoteWidth = getPercentageString(fQuoteTotal);
+          const sTaxWidth = getPercentageString(fTaxTotal);
+          const sCashWidth = getPercentageString(fCashTotal);
+
+          // Dynamic HTML template compilation injection layer
+          oHtmlMetricsDashboard.setContent(`
+                <div style="font-family: Arial, sans-serif; padding: 5px; min-width: 360px; color: #333;">
                     <div style="margin-bottom: 8px; font-size: 13px; font-weight: bold; color: #555;">
-                        Total Logged Operations: <span style="color: #2b7d2b;">${aRecords.length} Documents</span>
+                        Filtered Operations count: <span style="color: #2b7d2b;">${aFiltered.length} Documents</span>
                     </div>
                     <div style="margin-bottom: 18px; font-size: 15px; font-weight: bold; color: #000; border-bottom: 2px solid #eee; padding-bottom: 6px;">
-                        Gross Business Volume: <span style="color: #0a6ed1;">Rs. ${formatINR(fOverallRevenue)}</span>
+                        Gross Segment Volume: <span style="color: #0a6ed1;">Rs. ${formatINR(fOverallRevenue)}</span>
                     </div>
                     
                     <div style="margin-bottom: 12px;">
@@ -1616,8 +1678,8 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
                             <span>QUOTATIONS (Rs. ${formatINR(fQuoteTotal)})</span>
                             <span>${sQuoteWidth}</span>
                         </div>
-                        <div style="width: 100%; bg-color: #eee; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
-                            <div style="width: ${sQuoteWidth}; background: #2b7d2b; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.4s ease;"></div>
+                        <div style="width: 100%; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
+                            <div style="width: ${sQuoteWidth}; background: #2b7d2b; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.3s ease;"></div>
                         </div>
                     </div>
 
@@ -1626,8 +1688,8 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
                             <span>TAX INVOICES (Rs. ${formatINR(fTaxTotal)})</span>
                             <span>${sTaxWidth}</span>
                         </div>
-                        <div style="width: 100%; bg-color: #eee; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
-                            <div style="width: ${sTaxWidth}; background: #e67e22; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.4s ease;"></div>
+                        <div style="width: 100%; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
+                            <div style="width: ${sTaxWidth}; background: #e67e22; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.3s ease;"></div>
                         </div>
                     </div>
 
@@ -1636,44 +1698,49 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
                             <span>CASH BILLS (Rs. ${formatINR(fCashTotal)})</span>
                             <span>${sCashWidth}</span>
                         </div>
-                        <div style="width: 100%; bg-color: #eee; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
-                            <div style="width: ${sCashWidth}; background: #d32f2f; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.4s ease;"></div>
+                        <div style="width: 100%; background: #e0e0e0; border-radius: 4px; height: 14px; overflow: hidden;">
+                            <div style="width: ${sCashWidth}; background: #d32f2f; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.3s ease;"></div>
                         </div>
                     </div>
                 </div>
-            `
+            `);
+        };
+
+        // CRITICAL CHANGE: Attach listeners AFTER the filter function is completely declared
+        oYearSelect.attachChange(() => {
+          fnFilterAndRefreshDashboard();
+        });
+        oMonthSelect.attachChange(() => {
+          fnFilterAndRefreshDashboard();
         });
 
-        // 4. Construct Dialog Popup Overlay container
+        // Fire initial load execution map to paint statistics immediately upon load
+        fnFilterAndRefreshDashboard();
+
+        // 6. Construct Primary Dialog Wrapper Overlay setup
         const oDialog = new Dialog({
           title: "Business Revenue Analytics Dashboard",
           type: "Message",
           contentWidth: "420px",
-          content: [oHtmlMetricsDashboard],
-          buttons: [
-          // Button 1: Excel Data Downloader
-          new sap.m.Button({
+          content: [new sap.m.VBox({
+            items: [oFilterToolbar, oHtmlMetricsDashboard]
+          }).addStyleClass("sapUiContentPadding")],
+          buttons: [new sap.m.Button({
             icon: "sap-icon://excel-attachment",
             type: "Accept",
-            // Gives it a professional green highlight matching Excel styling
             press: () => {
               this._downloadAnalyticsExcel(aRecords);
             }
-          }),
-          // Button 2: Cloud Storage Wiper
-          new sap.m.Button({
+          }), new sap.m.Button({
             text: "Clear History",
             icon: "sap-icon://delete",
             type: "Negative",
-            // Gives it a red warning highlight
             press: () => {
               this._clearAnalyticsCloudData(oDialog);
             }
-          }),
-          // Original Exit Button
-          new sap.m.Button({
-            type: "Reject",
+          }), new sap.m.Button({
             icon: "sap-icon://decline",
+            type: "Reject",
             press: () => {
               oDialog.close();
             }
@@ -1684,7 +1751,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         });
         oDialog.open();
       } catch (err) {
-        sap.m.MessageBox.error(`Analytics Visualization Fault: ${err.message || err}`);
+        sap.m.MessageBox.error(`Analytics Dashboard Generation Fault: ${err.message || err}`);
       } finally {
         sap.ui.core.BusyIndicator.hide();
       }
@@ -1717,16 +1784,48 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
     },
     // /**
     //  * Wipes out all historical transactions inside the dedicated analytics cloud bin.
-    //  * @param {sap.m.Dialog} oDialog Reference to the open dialog so we can close it upon reset
-    //  */
-    _clearAnalyticsCloudData: function _clearAnalyticsCloudData(oDialog) {
-      sap.m.MessageBox.confirm("Are you sure you want to permanently delete all cloud analytics history? This cannot be undone.", {
-        actions: [sap.m.MessageBox.Action.YES, sap.m.MessageBox.Action.NO],
-        onClose: async sAction => {
-          if (sAction === sap.m.MessageBox.Action.YES) {
+    /**
+    * Prompts a password validation dialog box before wiping historical records from the cloud bin.
+    * @param {sap.m.Dialog} oDashboardDialog Reference to the parent dashboard dialog overlay
+    */
+    _clearAnalyticsCloudData: function _clearAnalyticsCloudData(oDashboardDialog) {
+      // 1. Hardcode your chosen administrative access password here
+      const sMasterPassword = "clearMe@22";
+
+      // 2. Instantiate a secure Password Input field component
+      const oPasswordInput = new sap.m.Input({
+        type: sap.m.InputType.Password,
+        placeholder: "Enter admin password",
+        width: "100%"
+      });
+
+      // 3. Build the primary security authentication container window
+      const oSecurityDialog = new Dialog({
+        title: "Security Verification Required",
+        type: "Message",
+        state: "Warning",
+        // Provides a distinct orange accent bar
+        content: [new sap.m.Text({
+          text: "This action will permanently wipe out all recorded historical transaction data. Please enter the master password to authorize this action:"
+        }), oPasswordInput],
+        beginButton: new sap.m.Button({
+          text: "Authorize & Clear",
+          type: "Reject",
+          // Highlights the button red for destructive operations
+          press: async () => {
+            const sEnteredPassword = oPasswordInput.getValue();
+
+            // 4. Validate input value against the hardcoded key string
+            if (sEnteredPassword !== sMasterPassword) {
+              sap.m.MessageBox.error("Authentication Failed! Incorrect password entry.");
+              oPasswordInput.setValue(""); // Reset input field clear
+              return;
+            }
+
+            // 5. If correct, proceed to trigger your existing database reset logic
+            oSecurityDialog.close();
             sap.ui.core.BusyIndicator.show(0);
             try {
-              // Reset the cloud bin back to an empty records array
               const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
                 method: "PUT",
                 headers: {
@@ -1739,15 +1838,25 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               });
               if (!response.ok) throw new Error("Cloud database rejected the wipe request.");
               sap.m.MessageToast.show("Analytics history successfully cleared from the cloud!");
-              oDialog.close(); // Close the dashboard overlay cleanly
+              oDashboardDialog.close(); // Closes the underlying dashboard chart layout cleanly
             } catch (err) {
               sap.m.MessageBox.error(`Clear Operational Fault: ${err.message}`);
             } finally {
               sap.ui.core.BusyIndicator.hide();
             }
           }
+        }),
+        endButton: new sap.m.Button({
+          text: "Abort",
+          press: () => {
+            oSecurityDialog.close();
+          }
+        }),
+        afterClose: () => {
+          oSecurityDialog.destroy();
         }
       });
+      oSecurityDialog.open();
     }
   });
   return View;
