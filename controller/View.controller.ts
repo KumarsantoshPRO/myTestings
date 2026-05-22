@@ -16,14 +16,12 @@ import FilterOperator from "sap/ui/model/FilterOperator";
 import ListBinding from "sap/ui/model/ListBinding";
 import ColumnListItem from "sap/m/ColumnListItem";
 import DateFormat from "sap/ui/core/format/DateFormat";
-
-import IconPool from "sap/ui/core/IconPool";
+import BusyIndicator from "sap/ui/core/BusyIndicator";
 
 declare var jspdf: any;
 declare var sap: any;
-declare var XLSX: any; // External SheetJS Library Reference
-declare var sap: any;
-declare var window: any; // Ensure window is accessible if needed
+declare var XLSX: any;
+declare var window: any;
 
 const formatINR = (amount: number | string): string => {
     const value = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -46,78 +44,46 @@ export default class View extends Controller {
     private sCustomSuffixKey: string = "my_billing_app_custom_suffix_format";
     private sCustomTriggerFlag: string = "my_billing_app_use_custom_start_flag";
 
+    // CENTRALIZED CLOUD STORAGE CONFIGURATION (jsonbin.io)
+    // Replace these placeholder strings with your actual keys from Step 1
+    private sBinId: string = "6a0ffb516610dd3ae8873764";
+    private sMasterKey: string = "$2a$10$QW2jbDsLe9nN3eAqSzg6v.Zz3jHv6WQfDk.HLgm4T3V0uvumxbx8i";
+
     public onInit(): void {
         let oData: any;
         const sSavedData = localStorage.getItem(this.sStorageKey);
-        // 1. Get today's date
         var oToday = new Date();
-
-        // 2. Create a formatter matching your XML valueFormat
-        var oDateFormat = (DateFormat as any).getInstance({
-            pattern: "dd-MM-yyyy"
-        });
-
-        // 3. Format today's date into the string
+        var oDateFormat = (DateFormat as any).getInstance({ pattern: "dd-MM-yyyy" });
         var sTodayDate = oDateFormat.format(oToday);
 
         if (sSavedData) {
-            try {
-                oData = JSON.parse(sSavedData);
-            } catch (e) {
-                oData = null;
-            }
+            try { oData = JSON.parse(sSavedData); } catch (e) { oData = null; }
         }
 
         if (!oData) {
             oData = {
                 header: {
-                    To: "",
-                    Date: sTodayDate,
-                    Subject: "",
-                    AddtionalInfo: "",
-                    Notes: "",
-                    TermsAndConditions: "",
+                    To: "", Date: sTodayDate, Subject: "", AddtionalInfo: "", Notes: "", TermsAndConditions: "",
                     BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
                 },
-                products: [
-                    { productName: "", quantity: 1, price: "0.00", symbol: "", total: "0.00" }
-                ],
+                products: [{ productName: "", quantity: 1, price: "0.00", symbol: "", total: "0.00" }],
                 taxHeader: {
-                    To: "",
-                    GSTNo: "29AGKPP7288F1Z0",
-                    InvoiceNo: "",
-                    Date: sTodayDate,
-                    PONo: "",
-                    PODate: "",
-                    PartyGST: "",
+                    To: "", GSTNo: "29AGKPP7288F1Z0", InvoiceNo: "", Date: sTodayDate, PONo: "", PODate: "", PartyGST: "",
                     BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
                 },
-                taxProducts: [
-                    { taxpProductName: "", taxHSNCode: "", taxQuantity: 1, taxPrice: 0, taxSymbol: "", taxTotal: "0.00" }
-                ],
+                taxProducts: [{ taxpProductName: "", taxHSNCode: "", taxQuantity: 1, taxPrice: 0, taxSymbol: "", taxTotal: "0.00" }],
                 cashHeader: {
-                    cashTo: "",
-                    cashDate: sTodayDate,
+                    cashTo: "", cashDate: sTodayDate,
                     cashbankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
                 },
-                cashProducts: [
-                    { cashBody: "", cashQuantity: "1", cashAmount: "0.00" }
-                ],
-                gst: "0.00",
-                totalSum: "0.00",
-                taxtotal: "0.00",
-                taxcgst: "0.00",
-                taxsgst: "0.00",
-                taxtotalSum: "0.00",
-                cashTotalSum: "0.00"
+                cashProducts: [{ cashBody: "", cashQuantity: "1", cashAmount: "0.00" }],
+                gst: "0.00", totalSum: "0.00", taxtotal: "0.00", taxcgst: "0.00", taxsgst: "0.00", taxtotalSum: "0.00", cashTotalSum: "0.00"
             };
         }
 
         this.getView()?.setModel(new JSONModel(oData));
         this._loadLocalLogo("img/logo.jpg");
         this._loadSignature("img/Signature.jpg");
-
-        // Setup original visibility views state
         this._updateSectionVisibilities("Quotation");
     }
 
@@ -131,56 +97,75 @@ export default class View extends Controller {
     }
 
     private _getFirstLineName(sAddress: string): string {
-        if (!sAddress || sAddress.trim() === "") {
-            return "Document";
-        }
+        if (!sAddress || sAddress.trim() === "") return "Document";
         return sAddress.split("\n")[0].replace(/[/\\?%*:|"<>\s]/g, "_").trim();
     }
 
-    public onGenerateNextInvoiceNumber(): void {
+    public async onGenerateNextInvoiceNumber(): Promise<void> {
         const oModel = this.getView()?.getModel() as JSONModel;
+        BusyIndicator.show(0);
 
-        let iNextSequence: number;
-        let sSuffixFormat: string;
+        try {
+            let iNextSequence: number;
+            let sSuffixFormat: string;
+            const sIsCustomTriggerActive = localStorage.getItem(this.sCustomTriggerFlag);
 
-        const sIsCustomTriggerActive = localStorage.getItem(this.sCustomTriggerFlag);
+            if (sIsCustomTriggerActive === "X") {
+                // A. Local dialog manual override loop
+                iNextSequence = parseInt(localStorage.getItem(this.sCustomNumKey) || "1");
+                sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
+                localStorage.removeItem(this.sCustomTriggerFlag);
+            } else {
+                // B. Fetch the global live record counter from the cloud container
+                const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}/latest`, {
+                    method: "GET",
+                    headers: { "X-Master-Key": this.sMasterKey }
+                });
 
-        if (sIsCustomTriggerActive === "X") {
-            iNextSequence = parseInt(localStorage.getItem(this.sCustomNumKey) || "1");
-            sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
-            localStorage.removeItem(this.sCustomTriggerFlag);
-        } else {
-            let iLastSequence = parseInt(localStorage.getItem(this.sCustomNumKey) || "0");
-            iNextSequence = iLastSequence + 1;
-            sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
+                if (!response.ok) throw new Error("Could not retrieve current sequence from cloud server.");
+
+                const result = await response.json();
+                const iCurrentSequence = parseInt(result.record.counter) || 0;
+                iNextSequence = iCurrentSequence + 1;
+                sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
+            }
+
+            // C. Push the updated sequential index back up to the cloud repository synchronously
+            const updateResponse = await fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Master-Key": this.sMasterKey
+                },
+                body: JSON.stringify({ counter: iNextSequence })
+            });
+
+            if (!updateResponse.ok) throw new Error("Failed to write updated sequence index block back to database.");
+
+            // D. Keep local backups synchronized
+            localStorage.setItem(this.sCustomNumKey, iNextSequence.toString());
+
+            const sPaddedSequence = iNextSequence < 10 ? `0${iNextSequence}` : `${iNextSequence}`;
+            const sFinalInvoiceNo = `${sPaddedSequence}${sSuffixFormat}`;
+
+            oModel.setProperty("/taxHeader/InvoiceNo", sFinalInvoiceNo);
+            MessageToast.show(`Global Invoice generated successfully: ${sFinalInvoiceNo}`);
+
+        } catch (oError: any) {
+            MessageBox.error(`Global Counter Error: ${oError.message || oError}`);
+        } finally {
+            BusyIndicator.hide();
         }
-
-        localStorage.setItem(this.sCustomNumKey, iNextSequence.toString());
-
-        const sPaddedSequence = iNextSequence < 10 ? `0${iNextSequence}` : `${iNextSequence}`;
-        const sFinalInvoiceNo = `${sPaddedSequence}${sSuffixFormat}`;
-
-        oModel.setProperty("/taxHeader/InvoiceNo", sFinalInvoiceNo);
-        MessageToast.show(`Invoice generated successfully: ${sFinalInvoiceNo}`);
     }
 
     public onSetGlobalInvoiceSequence(): void {
         const oModel = this.getView()?.getModel() as JSONModel;
+        const oInput = new Input({ placeholder: "e.g., 99/26-27", width: "100%" });
 
-        // Create an input control dynamically
-        const oInput = new Input({
-            placeholder: "e.g., 99/26-27",
-            width: "100%"
-        });
-
-        // Construct standard dialog container with an integrated text input field
         const oDialog = new Dialog({
             title: "Set Global Invoice Sequence Start Template",
             type: "Message",
-            content: [
-                new Text({ text: "Enter the custom starting sequence template matching your format (e.g., 99/26-27):" }),
-                oInput
-            ],
+            content: [new Text({ text: "Enter the custom starting sequence template matching your format (e.g., 99/26-27):" }), oInput],
             beginButton: new Button({
                 text: "OK",
                 press: () => {
@@ -201,25 +186,33 @@ export default class View extends Controller {
 
                     const sExtractedSuffix = aParts.length > 1 ? `/${aParts.slice(1).join("/")}` : `/${this._getDefaultFYLabel()}`;
 
-                    localStorage.setItem(this.sCustomNumKey, iNewSequenceValue.toString());
-                    localStorage.setItem(this.sCustomSuffixKey, sExtractedSuffix);
-                    localStorage.setItem(this.sCustomTriggerFlag, "X");
+                    // Synchronously reset the centralized cloud database tracker value
+                    BusyIndicator.show(0);
+                    fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}`, {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-Master-Key": this.sMasterKey
+                        },
+                        body: JSON.stringify({ counter: iNewSequenceValue })
+                    }).then((res) => {
+                        if (!res.ok) throw new Error("Database update rejected.");
+                        localStorage.setItem(this.sCustomNumKey, iNewSequenceValue.toString());
+                        localStorage.setItem(this.sCustomSuffixKey, sExtractedSuffix);
+                        localStorage.setItem(this.sCustomTriggerFlag, "X");
 
-                    oModel.setProperty("/taxHeader/InvoiceNo", "");
-                    MessageToast.show(`Next Invoice Number sequence configured to begin exactly at: ${sRawInput}`);
-
-                    oDialog.close();
+                        oModel.setProperty("/taxHeader/InvoiceNo", "");
+                        MessageToast.show(`Global sequence reset successfully to: ${sRawInput}`);
+                        oDialog.close();
+                    }).catch((err) => {
+                        MessageBox.error(`Cloud Sync Failed: ${err.message}`);
+                    }).finally(() => {
+                        BusyIndicator.hide();
+                    });
                 }
             }),
-            endButton: new Button({
-                text: "Cancel",
-                press: () => {
-                    oDialog.close();
-                }
-            }),
-            afterClose: () => {
-                oDialog.destroy();
-            }
+            endButton: new Button({ text: "Cancel", press: () => { oDialog.close(); } }),
+            afterClose: () => { oDialog.destroy(); }
         });
 
         oDialog.open();
@@ -436,7 +429,6 @@ export default class View extends Controller {
         const sTargetFilename = this._getFirstLineName(oHeader.To) + "_Quotation.pdf";
         doc.save(sTargetFilename);
 
-        // Also trigger the matching Excel download
         this.onExcelDownload(null, "Quotation");
         this.onGenerateWord("Quotation");
     }
@@ -572,11 +564,8 @@ export default class View extends Controller {
         const sTargetFilename = this._getFirstLineName(oData.taxHeader.To) + "_TaxInvoice.pdf";
         doc.save(sTargetFilename);
 
-        // Also trigger the matching Excel download
         this.onExcelDownload(null, "TAX-INVOICE");
-
         this.onGenerateWord("TAX-INVOICE");
-
     }
 
     public onCashAddRow(): void {
@@ -601,9 +590,7 @@ export default class View extends Controller {
         const oModel = this.getView()?.getModel() as JSONModel;
         const aProducts = oModel.getProperty("/cashProducts") || [];
         let totalAmount = 0;
-        aProducts.forEach((item: any) => {
-            totalAmount += parseFloat(item.cashAmount || 0);
-        });
+        aProducts.forEach((item: any) => { totalAmount += parseFloat(item.cashAmount || 0); });
         oModel.setProperty("/cashTotalSum", totalAmount.toFixed(2));
     }
 
@@ -679,11 +666,8 @@ export default class View extends Controller {
         const sTargetFilename = this._getFirstLineName(oData.cashHeader.cashTo) + "_CashBill.pdf";
         doc.save(sTargetFilename);
 
-        // Also trigger the matching Excel download
         this.onExcelDownload(null, "Cash Bill");
-         this.onGenerateWord( "Cash Bill");
-
-
+        this.onGenerateWord("Cash Bill");
     }
 
     public onExcelDownload(oEvent: any, sOverrideMode?: string): void {
@@ -693,13 +677,10 @@ export default class View extends Controller {
         let headerData: any[] = [];
         let itemsData: any[] = [];
 
-        // Add explicit Mode metadata row to help processing uploads safely
         headerData.push({ "FIELD": "MODE_METADATA", "VALUE": sSelectMode });
 
         if (sSelectMode === "Quotation") {
             sFileName = this._getFirstLineName(oModel.getProperty("/header/To")) + "_QuotationItems.xlsx";
-
-            // Build key-value mapping rows for header parameters
             headerData.push({ "FIELD": "Header_To", "VALUE": oModel.getProperty("/header/To") });
             headerData.push({ "FIELD": "Header_Date", "VALUE": oModel.getProperty("/header/Date") });
             headerData.push({ "FIELD": "Header_Subject", "VALUE": oModel.getProperty("/header/Subject") });
@@ -709,15 +690,10 @@ export default class View extends Controller {
             headerData.push({ "FIELD": "Header_BankDetails", "VALUE": oModel.getProperty("/header/BankDetails") });
 
             itemsData = oModel.getProperty("/products").map((item: any) => ({
-                "Particulars": item.productName,
-                "Rate": item.price,
-                "Quantity": item.quantity,
-                "Symbol": item.symbol,
-                "Total": item.total
+                "Particulars": item.productName, "Rate": item.price, "Quantity": item.quantity, "Symbol": item.symbol, "Total": item.total
             }));
         } else if (sSelectMode === "TAX-INVOICE") {
             sFileName = this._getFirstLineName(oModel.getProperty("/taxHeader/To")) + "_TaxInvoiceItems.xlsx";
-
             headerData.push({ "FIELD": "TaxHeader_To", "VALUE": oModel.getProperty("/taxHeader/To") });
             headerData.push({ "FIELD": "TaxHeader_GSTNo", "VALUE": oModel.getProperty("/taxHeader/GSTNo") });
             headerData.push({ "FIELD": "TaxHeader_InvoiceNo", "VALUE": oModel.getProperty("/taxHeader/InvoiceNo") });
@@ -725,39 +701,24 @@ export default class View extends Controller {
             headerData.push({ "FIELD": "TaxHeader_PONo", "VALUE": oModel.getProperty("/taxHeader/PONo") });
             headerData.push({ "FIELD": "TaxHeader_PODate", "VALUE": oModel.getProperty("/taxHeader/PODate") });
             headerData.push({ "FIELD": "TaxHeader_PartyGST", "VALUE": oModel.getProperty("/taxHeader/PartyGST") });
-            // headerData.push({ "FIELD": "TaxHeader_BankDetails", "VALUE": oModel.getProperty("/taxHeader/BankDetails") });
 
             itemsData = oModel.getProperty("/taxProducts").map((item: any) => ({
-                "Particulars": item.taxpProductName,
-                "HSN Code": item.taxHSNCode,
-                "Rate": item.taxPrice,
-                "Quantity": item.taxQuantity,
-                "Symbol": item.taxSymbol,
-                "Total": item.taxTotal
+                "Particulars": item.taxpProductName, "HSN Code": item.taxHSNCode, "Rate": item.taxPrice, "Quantity": item.taxQuantity, "Symbol": item.taxSymbol, "Total": item.taxTotal
             }));
         } else {
             sFileName = this._getFirstLineName(oModel.getProperty("/cashHeader/cashTo")) + "_CashBillItems.xlsx";
-
             headerData.push({ "FIELD": "CashHeader_cashTo", "VALUE": oModel.getProperty("/cashHeader/cashTo") });
             headerData.push({ "FIELD": "CashHeader_cashDate", "VALUE": oModel.getProperty("/cashHeader/cashDate") });
             headerData.push({ "FIELD": "CashHeader_cashbankDetails", "VALUE": oModel.getProperty("/cashHeader/cashbankDetails") });
 
             itemsData = oModel.getProperty("/cashProducts").map((item: any) => ({
-                "Particulars": item.cashBody,
-                "Quantity": item.cashQuantity,
-                "Amount": item.cashAmount
+                "Particulars": item.cashBody, "Quantity": item.cashQuantity, "Amount": item.cashAmount
             }));
         }
 
-        // Generate worksheet starting with the custom structural metadata configurations
         const ws = XLSX.utils.json_to_sheet(headerData);
-
-        // Append an empty row for separation space layout
         XLSX.utils.sheet_add_aoa(ws, [[]], { origin: -1 });
-
-        // Append the operational Line Items directly beneath the spacing layer
         XLSX.utils.sheet_add_json(ws, itemsData, { origin: -1 });
-
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Items Data");
         XLSX.writeFile(wb, sFileName);
@@ -774,34 +735,26 @@ export default class View extends Controller {
             const workbook = XLSX.read(data, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
-
-            // Raw JSON translation captures structural definitions natively
             const rawJsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[];
             const sSelectMode = (this.getView()?.byId("mySelect") as Select).getSelectedItem()?.getText();
             const oModel = this.getView()?.getModel() as JSONModel;
 
-            // Differentiate header map items from structural matrix lines
             const headerMap: any = {};
             let lineItemsStartIndex = 0;
 
             for (let i = 0; i < rawJsonRows.length; i++) {
                 const row = rawJsonRows[i];
                 if (row && row[0] && typeof row[0] === 'string' && (row[0].includes("Header") || row[0] === "FIELD" || row[0] === "MODE_METADATA")) {
-                    if (row[0] !== "FIELD") {
-                        headerMap[row[0]] = row[1] || "";
-                    }
+                    if (row[0] !== "FIELD") headerMap[row[0]] = row[1] || "";
                 } else {
-                    // Blank row spacing found or data rows began
                     lineItemsStartIndex = i;
                     break;
                 }
             }
 
-            // Slice out the remaining block data rows and convert using original object property mapping arrays
             const lineItemsRows = rawJsonRows.slice(lineItemsStartIndex).filter(row => row && row.length > 0);
             if (lineItemsRows.length === 0) return;
 
-            // Extract table headers dynamically from array configuration parameters
             const tableHeaders = lineItemsRows[0];
             const jsonDataItems = lineItemsRows.slice(1).map(row => {
                 const obj: any = {};
@@ -812,7 +765,6 @@ export default class View extends Controller {
             });
 
             if (sSelectMode === "Quotation") {
-                // Restore Header Properties safely back into JSON Model path mappings
                 if (headerMap["Header_To"]) oModel.setProperty("/header/To", headerMap["Header_To"]);
                 if (headerMap["Header_Date"]) oModel.setProperty("/header/Date", headerMap["Header_Date"]);
                 if (headerMap["Header_Subject"]) oModel.setProperty("/header/Subject", headerMap["Header_Subject"]);
@@ -822,11 +774,8 @@ export default class View extends Controller {
                 if (headerMap["Header_BankDetails"]) oModel.setProperty("/header/BankDetails", headerMap["Header_BankDetails"]);
 
                 const parsedProducts = jsonDataItems.map((row: any) => ({
-                    productName: row["Particulars"] || "",
-                    price: row["Rate"]?.toString() || "0.00",
-                    quantity: parseInt(row["Quantity"]) || 1,
-                    symbol: row["Symbol"] || "",
-                    total: row["Total"]?.toString() || "0.00"
+                    productName: row["Particulars"] || "", price: row["Rate"]?.toString() || "0.00",
+                    quantity: parseInt(row["Quantity"]) || 1, symbol: row["Symbol"] || "", total: row["Total"]?.toString() || "0.00"
                 }));
                 oModel.setProperty("/products", parsedProducts);
                 this.onCalc();
@@ -838,15 +787,11 @@ export default class View extends Controller {
                 if (headerMap["TaxHeader_PONo"]) oModel.setProperty("/taxHeader/PONo", headerMap["TaxHeader_PONo"]);
                 if (headerMap["TaxHeader_PODate"]) oModel.setProperty("/taxHeader/PODate", headerMap["TaxHeader_PODate"]);
                 if (headerMap["TaxHeader_PartyGST"]) oModel.setProperty("/taxHeader/PartyGST", headerMap["TaxHeader_PartyGST"]);
-                // if (headerMap["TaxHeader_BankDetails"]) oModel.setProperty ("/taxHeader/BankDetails", headerMap["TaxHeader_BankDetails"]);
 
                 const parsedTax = jsonDataItems.map((row: any) => ({
-                    taxpProductName: row["Particulars"] || "",
-                    taxHSNCode: row["HSN Code"]?.toString() || "",
-                    taxQuantity: parseInt(row["Quantity"]) || 1,
-                    taxPrice: parseFloat(row["Rate"]) || 0,
-                    taxSymbol: row["Symbol"] || "",
-                    taxTotal: row["Total"]?.toString() || "0.00"
+                    taxpProductName: row["Particulars"] || "", taxHSNCode: row["HSN Code"]?.toString() || "",
+                    taxQuantity: parseInt(row["Quantity"]) || 1, taxPrice: parseFloat(row["Rate"]) || 0,
+                    taxSymbol: row["Symbol"] || "", taxTotal: row["Total"]?.toString() || "0.00"
                 }));
                 oModel.setProperty("/taxProducts", parsedTax);
                 this.onTaxCalc();
@@ -856,9 +801,7 @@ export default class View extends Controller {
                 if (headerMap["CashHeader_cashbankDetails"]) oModel.setProperty("/cashHeader/cashbankDetails", headerMap["CashHeader_cashbankDetails"]);
 
                 const parsedCash = jsonDataItems.map((row: any) => ({
-                    cashBody: row["Particulars"] || "",
-                    cashQuantity: row["Quantity"]?.toString() || "1",
-                    cashAmount: row["Amount"]?.toString() || "0.00"
+                    cashBody: row["Particulars"] || "", cashQuantity: row["Quantity"]?.toString() || "1", cashAmount: row["Amount"]?.toString() || "0.00"
                 }));
                 oModel.setProperty("/cashProducts", parsedCash);
                 this.onCashCalc();
@@ -868,8 +811,6 @@ export default class View extends Controller {
         };
         reader.readAsArrayBuffer(oFile);
     }
-
-
 
     private numberToWords(num: number): string {
         const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
@@ -896,11 +837,8 @@ export default class View extends Controller {
         const paisaPart = parts[1];
         let result = '';
 
-        if (Number(rupeePart) > 0) {
-            result += convertWholeNumber(rupeePart);
-        } else if (Number(paisaPart) > 0) {
-            result += 'Zero';
-        }
+        if (Number(rupeePart) > 0) { result += convertWholeNumber(rupeePart); }
+        else if (Number(paisaPart) > 0) { result += 'Zero'; }
 
         if (paisaPart && Number(paisaPart) > 0) {
             const p = paisaPart.match(/^(\d{2})$/);
@@ -912,15 +850,10 @@ export default class View extends Controller {
         return result.trim();
     }
 
-    /**
-     * Triggered when the value help icon inside the Input field is clicked
-     */
     public async onHSNValueHelpRequest(oEvent: any): Promise<void> {
-        // Store reference to the source input control to set the value later
         const oInput = oEvent.getSource() as Input;
         this.getView()?.data("valueHelpSourceInput", oInput);
 
-        // Load the XML Fragment asynchronously
         if (!this._pDialog) {
             this._pDialog = Fragment.load({
                 id: this.getView()?.getId(),
@@ -928,25 +861,16 @@ export default class View extends Controller {
                 controller: this
             }) as Promise<TableSelectDialog>;
 
-            // Connect dialog to the lifecycle of the view
             const oDialog = await this._pDialog;
             this.getView()?.addDependent(oDialog);
         }
 
         const oDialog = await this._pDialog;
-
-        // Ensure all rows are shown initially by resetting filters on open
         const oBinding = oDialog.getBinding("items") as ListBinding;
-        if (oBinding) {
-            oBinding.filter([]);
-        }
-
+        if (oBinding) oBinding.filter([]);
         oDialog.open("");
     }
 
-    /**
-     * Handles search option for all columns (HSN_CD and HSN_Description)
-     */
     public onHSNValueHelpSearch(oEvent: TableSelectDialog$SearchEvent): void {
         const sValue = oEvent.getParameter("value");
         const oDialog = oEvent.getSource() as TableSelectDialog;
@@ -957,38 +881,23 @@ export default class View extends Controller {
             return;
         }
 
-        // Create individual filters matching case-insensitive substrings
         const oFilterCode = new Filter("HSN_CD", FilterOperator.Contains, sValue);
         const oFilterDesc = new Filter("HSN_Description", FilterOperator.Contains, sValue);
-
-        // Combine using 'false' flag for OR operator to query both columns simultaneously
-        const oCombinedFilter = new Filter({
-            filters: [oFilterCode, oFilterDesc],
-            and: false
-        });
-
+        const oCombinedFilter = new Filter({ filters: [oFilterCode, oFilterDesc], and: false });
         oBinding.filter([oCombinedFilter]);
     }
-
 
     public onHSNValueHelpConfirm(oEvent: TableSelectDialog$ConfirmEvent): void {
         const oSelectedItem = oEvent.getParameter("selectedItem");
         const oInput = this.getView()?.data("valueHelpSourceInput") as Input;
 
-        if (!oSelectedItem) {
-            return;
-        }
+        if (!oSelectedItem) return;
 
-        // Get the structural bound context object properties
         const oContext = oSelectedItem.getBindingContext("hsnModel");
         if (oContext) {
             const sSelectedCode = oContext.getProperty("HSN_CD") as string;
-
-            // Populate value to your Input element
             oInput.setValue(sSelectedCode);
         }
-
-
     }
 
     public async onShareToWhatsApp(): Promise<void> {
@@ -1004,22 +913,12 @@ export default class View extends Controller {
             return;
         }
 
-        let sClientName = "";
-        let sTotalAmount = "";
-        let sDocIdentifier = "";
-        let sRawAddressText = "";
-        let sTargetFilename = "Document.pdf";
+        let sClientName = ""; let sTotalAmount = ""; let sDocIdentifier = ""; let sRawAddressText = ""; let sTargetFilename = "Document.pdf";
 
-        // 1. Instantiating a temporary jsPDF instance to generate the specific file bytes
         const doc = new jspdfLib.jsPDF();
-        const pageWidth = doc.internal.pageSize.width;
-        const pageHeight = doc.internal.pageSize.height;
-        const margin = 5;
+        const pageWidth = doc.internal.pageSize.width; const pageHeight = doc.internal.pageSize.height; const margin = 5;
 
-        // Apply standard border framing
-        doc.setDrawColor(0, 0, 0);
-        doc.setLineWidth(0.3);
-        doc.rect(margin, margin, pageWidth - (margin * 2), pageHeight - (margin * 2));
+        doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.3); doc.rect(margin, margin, pageWidth - (margin * 2), pageHeight - (margin * 2));
 
         if (this.sLogoBase64) { doc.addImage(this.sLogoBase64, 'JPEG', 14, 10, 70, 25); }
 
@@ -1032,157 +931,90 @@ export default class View extends Controller {
         doc.text("Nagarabhavi, Bangalore-560072", pageWidth - 14, 35, { align: 'right' });
         doc.line(5, 40, pageWidth - 5, 40);
 
-        // 2. Replicate your specific document generation logic conditionally
         if (sSelectMode === "Quotation") {
             const oHeader = oModel.getProperty("/header");
             const aItems = oModel.getProperty("/products");
-            sRawAddressText = oHeader.To || "";
-            sClientName = this._getFirstLineName(sRawAddressText);
-            sTotalAmount = formatINR(oModel.getProperty("/totalSum"));
-            sDocIdentifier = "Quotation";
-            sTargetFilename = `${sClientName}_Quotation.pdf`;
+            sRawAddressText = oHeader.To || ""; sClientName = this._getFirstLineName(sRawAddressText);
+            sTotalAmount = formatINR(oModel.getProperty("/totalSum")); sDocIdentifier = "Quotation"; sTargetFilename = `${sClientName}_Quotation.pdf`;
 
-            doc.setFont("helvetica", "bold");
-            doc.text(`Date: ${oHeader.Date}`, pageWidth - 14, 45, { align: 'right' });
-            doc.text("To,", 14, 45);
-            doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oHeader.To, 80), 14, 50);
-            doc.setFont("helvetica", "bold");
-            let finalHeaderY = 70;
-            doc.text("Sub: " + oHeader.Subject, 14, 70);
-            doc.setFont("helvetica", "normal");
-            if (oHeader.AddtionalInfo !== "") { doc.text(oHeader.AddtionalInfo, 14, finalHeaderY + 4); }
+            doc.setFont("helvetica", "bold"); doc.text(`Date: ${oHeader.Date}`, pageWidth - 14, 45, { align: 'right' }); doc.text("To,", 14, 45);
+            doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oHeader.To, 80), 14, 50);
+            doc.setFont("helvetica", "bold"); let finalHeaderY = 70; doc.text("Sub: " + oHeader.Subject, 14, 70);
+            doc.setFont("helvetica", "normal"); if (oHeader.AddtionalInfo !== "") { doc.text(oHeader.AddtionalInfo, 14, finalHeaderY + 4); }
 
             const bShowGST = (oView.byId("chkGST") as CheckBox).getSelected();
             const bShowTotal = (oView.byId("chkTotal") as CheckBox).getSelected();
-            const tableBody = aItems.map((item: any, index: number) => [
-                index + 1, item.productName, item.quantity, item.price + item.symbol, formatINR(item.total)
-            ]);
+            const tableBody = aItems.map((item: any, index: number) => [index + 1, item.productName, item.quantity, item.price + item.symbol, formatINR(item.total)]);
             const subtotal = aItems.reduce((acc: number, cur: any) => acc + parseFloat(cur.total || 0), 0);
-            const gstAmount = subtotal * 0.18;
-            const grandTotal = subtotal + gstAmount;
+            const gstAmount = subtotal * 0.18; const grandTotal = subtotal + gstAmount;
 
             if (bShowGST) tableBody.push([{ content: '18% GST Amount', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(gstAmount), styles: { halign: 'right', fontStyle: 'bold' } }]);
             if (bShowTotal) tableBody.push([{ content: 'Total', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(grandTotal), styles: { halign: 'right', fontStyle: 'bold' } }]);
 
             (doc as any).autoTable({
-                startY: finalHeaderY + 8,
-                head: [['Sl.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']],
-                body: tableBody,
-                theme: 'grid',
-                styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.1 },
-                headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold' }
+                startY: finalHeaderY + 8, head: [['Sl.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']], body: tableBody, theme: 'grid',
+                styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.1 }, headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold' }
             });
 
             let finalY = (doc as any).lastAutoTable.finalY;
-            if (oHeader.TermsAndConditions !== "") {
-                finalY += 10;
-                doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 4);
-            }
-            if ((oView.byId("chkBankDetail") as CheckBox).getSelected()) {
-                finalY += 20;
-                doc.text(doc.splitTextToSize(oHeader.BankDetails, pageWidth - 28), 14, finalY + 4);
-            }
+            if (oHeader.TermsAndConditions !== "") { finalY += 10; doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 4); }
+            if ((oView.byId("chkBankDetail") as CheckBox).getSelected()) { finalY += 20; doc.text(doc.splitTextToSize(oHeader.BankDetails, pageWidth - 28), 14, finalY + 4); }
 
         } else if (sSelectMode === "TAX-INVOICE") {
             const oData = oModel.getData();
-            sRawAddressText = oData.taxHeader.To || "";
-            sClientName = this._getFirstLineName(sRawAddressText);
-            sTotalAmount = formatINR(oModel.getProperty("/taxtotalSum"));
-            sDocIdentifier = `Tax Invoice (${oData.taxHeader.InvoiceNo || "N/A"})`;
-            sTargetFilename = `${sClientName}_TaxInvoice.pdf`;
+            sRawAddressText = oData.taxHeader.To || ""; sClientName = this._getFirstLineName(sRawAddressText);
+            sTotalAmount = formatINR(oModel.getProperty("/taxtotalSum")); sDocIdentifier = `Tax Invoice (${oData.taxHeader.InvoiceNo || "N/A"})`; sTargetFilename = `${sClientName}_TaxInvoice.pdf`;
 
-            doc.setFont("helvetica", "bold");
-            doc.text("To,", 15, 44);
-            doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oData.taxHeader.To, 90), 15, 49);
+            doc.setFont("helvetica", "bold"); doc.text("To,", 15, 44); doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oData.taxHeader.To, 90), 15, 49);
+            const metaX = 130; doc.text(`GST No: ${oData.taxHeader.GSTNo}`, metaX, 44); doc.text(`Invoice No: ${oData.taxHeader.InvoiceNo}`, metaX, 50); doc.text(`Date: ${oData.taxHeader.Date}`, metaX, 56);
 
-            const metaX = 130;
-            doc.text(`GST No: ${oData.taxHeader.GSTNo}`, metaX, 44);
-            doc.text(`Invoice No: ${oData.taxHeader.InvoiceNo}`, metaX, 50);
-            doc.text(`Date: ${oData.taxHeader.Date}`, metaX, 56);
-
-            const tableRows = oData.taxProducts.map((item: any, index: number) => [
-                index + 1, item.taxpProductName, item.taxHSNCode, formatINR(item.taxPrice) + item.taxSymbol, item.taxQuantity, formatINR(item.taxTotal)
-            ]);
+            const tableRows = oData.taxProducts.map((item: any, index: number) => [index + 1, item.taxpProductName, item.taxHSNCode, formatINR(item.taxPrice) + item.taxSymbol, item.taxQuantity, formatINR(item.taxTotal)]);
             const totalAmount = oData.taxProducts.reduce((sum: number, item: any) => sum + parseFloat(item.taxTotal), 0);
-            const taxVal = totalAmount * 0.09;
-            const grandTotal = totalAmount + (taxVal * 2);
+            const taxVal = totalAmount * 0.09; const grandTotal = totalAmount + (taxVal * 2);
 
             tableRows.push(
                 [{ content: `TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(totalAmount), styles: { halign: 'right', fontStyle: 'bold' } }],
                 [{ content: `GRAND TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }, { content: formatINR(grandTotal), styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }]
             );
 
-            (doc as any).autoTable({
-                startY: 75,
-                head: [["SI No.", "Particulars", "HSN Code", "Rate", "No.of Units", "Amount"]],
-                body: tableRows,
-                theme: 'grid'
-            });
-
-            const finalY = (doc as any).lastAutoTable.finalY + 5;
-            doc.text(`Rupees in words: ${this.numberToWords(grandTotal)} Only`, 10, finalY + 10);
+            (doc as any).autoTable({ startY: 75, head: [["SI No.", "Particulars", "HSN Code", "Rate", "No.of Units", "Amount"]], body: tableRows, theme: 'grid' });
+            const finalY = (doc as any).lastAutoTable.finalY + 5; doc.text(`Rupees in words: ${this.numberToWords(grandTotal)} Only`, 10, finalY + 10);
 
         } else {
             const oData = oModel.getData();
-            sRawAddressText = oData.cashHeader.cashTo || "";
-            sClientName = this._getFirstLineName(sRawAddressText);
-            sTotalAmount = formatINR(oModel.getProperty("/cashTotalSum"));
-            sDocIdentifier = "Cash Bill";
-            sTargetFilename = `${sClientName}_CashBill.pdf`;
+            sRawAddressText = oData.cashHeader.cashTo || ""; sClientName = this._getFirstLineName(sRawAddressText);
+            sTotalAmount = formatINR(oModel.getProperty("/cashTotalSum")); sDocIdentifier = "Cash Bill"; sTargetFilename = `${sClientName}_CashBill.pdf`;
 
-            doc.setFont("helvetica", "bold");
-            doc.text("To,", 15, 46);
-            doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oData.cashHeader.cashTo, 90), 15, 51);
+            doc.setFont("helvetica", "bold"); doc.text("To,", 15, 46); doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oData.cashHeader.cashTo, 90), 15, 51);
             doc.text(`Date: ${oData.cashHeader.cashDate}`, pageWidth - 14, 46, { align: 'right' });
 
-            const tableRows = oData.cashProducts.map((item: any, index: number) => [
-                index + 1, item.cashBody, item.cashQuantity, formatINR(item.cashAmount)
-            ]);
+            const tableRows = oData.cashProducts.map((item: any, index: number) => [index + 1, item.cashBody, item.cashQuantity, formatINR(item.cashAmount)]);
             const totalAmount = oData.cashProducts.reduce((sum: number, item: any) => sum + parseFloat(item.cashAmount || 0), 0);
-            tableRows.push([
-                { content: `GRAND TOTAL:`, colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } },
-                { content: formatINR(totalAmount), styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }
-            ]);
+            tableRows.push([{ content: `GRAND TOTAL:`, colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }, { content: formatINR(totalAmount), styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }]);
 
-            (doc as any).autoTable({
-                startY: 75,
-                head: [["SI No.", "Particulars", "Quantity", "Amount"]],
-                body: tableRows,
-                theme: 'grid'
-            });
+            (doc as any).autoTable({ startY: 75, head: [["SI No.", "Particulars", "Quantity", "Amount"]], body: tableRows, theme: 'grid' });
         }
 
         if (this.sSignaturBase64) { doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 40, 70, 25); }
 
-        // 3. Extract the PDF as an array buffer blob instead of downloading immediately
         const blobHTML5 = doc.output('blob');
         const pdfFile = new File([blobHTML5], sTargetFilename, { type: 'application/pdf' });
 
-        // 4. Verify if the host browser device environment supports shared attachments natively
         if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
             try {
                 await navigator.share({
-                    files: [pdfFile],
-                    title: `${sDocIdentifier} - IN-TELECOM SERVICES`,
+                    files: [pdfFile], title: `${sDocIdentifier} - IN-TELECOM SERVICES`,
                     text: `Hello ${sClientName},\n\nYour *${sDocIdentifier}* from *IN-TELECOM SERVICES* is attached.\n\n*Amount Due:* Rs. ${sTotalAmount}\n\nThank you!`
                 });
                 MessageToast.show("Share prompt initialized successfully.");
-            } catch (error) {
-                MessageBox.error("Sharing processing was cancelled or encountered an error.");
-            }
+            } catch (error) { MessageBox.error("Sharing processing was cancelled or encountered an error."); }
         } else {
-            // Fallback for non-supported browsers (Desktop Chrome / Legacy Environments)
             MessageBox.information(
                 "Direct file attachment is not supported on this browser window configuration. The PDF file will be downloaded onto your local system shelf. You can drag and drop it into your WhatsApp target chat window manually.",
                 {
                     title: "Browser Sharing Limitation",
                     onClose: () => {
                         doc.save(sTargetFilename);
-
-                        // Fall back to opening the standard text api thread link
                         const aPhoneMatch = sRawAddressText.match(/(?:(?:\+91)|91)?\s*([6-9]\d{9})\b/);
                         let sTargetPhone = aPhoneMatch ? "91" + aPhoneMatch[1] : "";
                         const sMessageText = `Hello ${sClientName},\n\nYour *${sDocIdentifier}* from *IN-TELECOM SERVICES* is ready.\n\n*Amount Due:* Rs. ${sTotalAmount}`;
@@ -1194,7 +1026,6 @@ export default class View extends Controller {
     }
 
     public async onGenerateWord(sMode: string): Promise<void> {
-        // 1. Asynchronously initialize the browser-compatible docxtemplater and PizZip bundles
         if (!(window as any).docxtemplater) {
             try {
                 await new Promise<void>((resolve, reject) => {
@@ -1221,11 +1052,8 @@ export default class View extends Controller {
         const oModel = this.getView()?.getModel() as JSONModel;
         const oData = oModel.getData();
 
-        let sTemplatePath = "";
-        let sTargetFilename = "";
-        let oTemplateDataMap: any = {};
+        let sTemplatePath = ""; let sTargetFilename = ""; let oTemplateDataMap: any = {};
 
-        // 2. Map dataset payloads dynamically based on visibility modes
         if (sMode === "Quotation") {
             sTemplatePath = "my/app/generatebill/model/Quotation_Template.docx";
             sTargetFilename = this._getFirstLineName(oData.header.To) + "_Quotation.docx";
@@ -1233,52 +1061,21 @@ export default class View extends Controller {
             const subtotal = oData.products.reduce((acc: number, cur: any) => acc + parseFloat(cur.total || 0), 0);
             const gstAmount = subtotal * 0.18;
             oTemplateDataMap = {
-                To: oData.header.To,
-                Date: oData.header.Date,
-                Subject: oData.header.Subject,
-                AdditionalInfo: oData.header.AddtionalInfo,
-                prds: oData.products.map((item: any, idx: number) => ({
-                    i: idx + 1,
-                    productName: item.productName,
-                    quantity: item.quantity,
-                    price: item.price,
-                    symbol: item.symbol,
-                    total: formatINR(item.total)
-                })),
-                gstAmount: formatINR(gstAmount),
-                grandTotal: formatINR(oModel.getProperty("/totalSum")),
-                Notes: oData.header.Notes,
-                TermsAndConditions: oData.header.TermsAndConditions
+                To: oData.header.To, Date: oData.header.Date, Subject: oData.header.Subject, AdditionalInfo: oData.header.AddtionalInfo,
+                prds: oData.products.map((item: any, idx: number) => ({ i: idx + 1, productName: item.productName, quantity: item.quantity, price: item.price, symbol: item.symbol, total: formatINR(item.total) })),
+                gstAmount: formatINR(gstAmount), grandTotal: formatINR(oModel.getProperty("/totalSum")), Notes: oData.header.Notes, TermsAndConditions: oData.header.TermsAndConditions
             };
         } else if (sMode === "TAX-INVOICE") {
             sTemplatePath = "my/app/generatebill/model/TaxInvoice_Template.docx";
             sTargetFilename = this._getFirstLineName(oData.taxHeader.To) + "_TaxInvoice.docx";
 
             const totalAmount = oData.taxProducts.reduce((sum: number, item: any) => sum + parseFloat(item.taxTotal), 0);
-            const taxVal = totalAmount * 0.09;
-            const grandTotal = totalAmount + (taxVal * 2);
+            const taxVal = totalAmount * 0.09; const grandTotal = totalAmount + (taxVal * 2);
 
             oTemplateDataMap = {
-                To: oData.taxHeader.To,
-                InvoiceNo: oData.taxHeader.InvoiceNo,
-                Date: oData.taxHeader.Date,
-                PONo: oData.taxHeader.PONo,
-                PODate: oData.taxHeader.PODate,
-                taxPrd: oData.taxProducts.map((item: any, idx: number) => ({
-                    in: idx + 1,
-                    taxPart: item.taxpProductName,
-                    taxHSN: item.taxHSNCode,
-                    taxP: formatINR(item.taxPrice),
-                    taxS: item.taxSymbol,
-                    taxQ: item.taxQuantity,
-                    taxT: formatINR(item.taxTotal)
-                })),
-                total: formatINR(totalAmount),
-                cgst: formatINR(taxVal),
-                sgst: formatINR(taxVal),
-                grandTotal: formatINR(grandTotal),
-                words: this.numberToWords(grandTotal),
-                PartyGST: oData.taxHeader.PartyGST
+                To: oData.taxHeader.To, InvoiceNo: oData.taxHeader.InvoiceNo, Date: oData.taxHeader.Date, PONo: oData.taxHeader.PONo, PODate: oData.taxHeader.PODate,
+                taxPrd: oData.taxProducts.map((item: any, idx: number) => ({ in: idx + 1, taxPart: item.taxpProductName, taxHSN: item.taxHSNCode, taxP: formatINR(item.taxPrice), taxS: item.taxSymbol, taxQ: item.taxQuantity, taxT: formatINR(item.taxTotal) })),
+                total: formatINR(totalAmount), cgst: formatINR(taxVal), sgst: formatINR(taxVal), grandTotal: formatINR(grandTotal), words: this.numberToWords(grandTotal), PartyGST: oData.taxHeader.PartyGST
             };
         } else {
             sTemplatePath = "my/app/generatebill/model/CashBill_Template.docx";
@@ -1287,55 +1084,29 @@ export default class View extends Controller {
             const totalAmount = oData.cashProducts.reduce((sum: number, item: any) => sum + parseFloat(item.cashAmount || 0), 0);
 
             oTemplateDataMap = {
-                cashTo: oData.cashHeader.cashTo,
-                cashDate: oData.cashHeader.cashDate,
-                cP: oData.cashProducts.map((item: any, idx: number) => ({
-                    i: idx + 1,
-                    cashBody: item.cashBody,
-                    cashQuantity: item.cashQuantity,
-                    cashAmount: formatINR(item.cashAmount)
-                })),
-                cashTotalSum: formatINR(totalAmount),
-                words: this.numberToWords(totalAmount)
+                cashTo: oData.cashHeader.cashTo, cashDate: oData.cashHeader.cashDate,
+                cP: oData.cashProducts.map((item: any, idx: number) => ({ i: idx + 1, cashBody: item.cashBody, cashQuantity: item.cashQuantity, cashAmount: formatINR(item.cashAmount) })),
+                cashTotalSum: formatINR(totalAmount), words: this.numberToWords(totalAmount)
             };
         }
 
         try {
-            // 3. Load the template binary from your webapp model layer via XMLHttpRequest
             const sTemplateUrl = sap.ui.require.toUrl(sTemplatePath);
             const response = await fetch(sTemplateUrl);
             if (!response.ok) throw new Error("Could not fetch the specified Word template.");
 
             const arrayBuffer = await response.arrayBuffer();
             const zip = new PizZip(arrayBuffer);
+            const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
-            // 4. Initialize docxtemplater on the loaded archive context
-            const doc = new Docxtemplater(zip, {
-                paragraphLoop: true,
-                linebreaks: true
-            });
-
-            // 5. Render fields dynamically
             doc.setData(oTemplateDataMap);
             doc.render();
 
-            // 6. Extract the document blob stream and trigger instant browser download
-            const outBlob = doc.getZip().generate({
-                type: "blob",
-                mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            });
-
+            const outBlob = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
             const link = document.createElement("a");
-            link.href = URL.createObjectURL(outBlob);
-            link.download = sTargetFilename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            link.href = URL.createObjectURL(outBlob); link.download = sTargetFilename; document.body.appendChild(link); link.click(); document.body.removeChild(link);
 
             MessageToast.show("Word document successfully downloaded from template mapping!");
-        } catch (error: any) {
-            MessageBox.error("Error filling out document template: " + error.message);
-        }
+        } catch (error: any) { MessageBox.error("Error filling out document template: " + error.message); }
     }
-
 }

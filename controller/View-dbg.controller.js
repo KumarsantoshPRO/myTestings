@@ -1,9 +1,5 @@
-sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap/m/MessageBox", "sap/m/MessageToast", "sap/m/Button", "sap/m/Dialog", "sap/m/Input", "sap/m/Text", "sap/ui/core/Fragment", "sap/ui/model/Filter", "sap/ui/model/FilterOperator", "sap/ui/core/format/DateFormat"], function (Controller, JSONModel, MessageBox, MessageToast, Button, Dialog, Input, Text, Fragment, Filter, FilterOperator, DateFormat) {
+sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap/m/MessageBox", "sap/m/MessageToast", "sap/m/Button", "sap/m/Dialog", "sap/m/Input", "sap/m/Text", "sap/ui/core/Fragment", "sap/ui/model/Filter", "sap/ui/model/FilterOperator", "sap/ui/core/format/DateFormat", "sap/ui/core/BusyIndicator"], function (Controller, JSONModel, MessageBox, MessageToast, Button, Dialog, Input, Text, Fragment, Filter, FilterOperator, DateFormat, BusyIndicator) {
   "use strict";
-
-  // External SheetJS Library Reference
-
-  // Ensure window is accessible if needed
 
   const formatINR = amount => {
     const value = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -25,19 +21,18 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       this.sCustomNumKey = "my_billing_app_custom_numeric_seq";
       this.sCustomSuffixKey = "my_billing_app_custom_suffix_format";
       this.sCustomTriggerFlag = "my_billing_app_use_custom_start_flag";
+      // CENTRALIZED CLOUD STORAGE CONFIGURATION (jsonbin.io)
+      // Replace these placeholder strings with your actual keys from Step 1
+      this.sBinId = "6a0ffb516610dd3ae8873764";
+      this.sMasterKey = "$2a$10$QW2jbDsLe9nN3eAqSzg6v.Zz3jHv6WQfDk.HLgm4T3V0uvumxbx8i";
     },
     onInit: function _onInit() {
       let oData;
       const sSavedData = localStorage.getItem(this.sStorageKey);
-      // 1. Get today's date
       var oToday = new Date();
-
-      // 2. Create a formatter matching your XML valueFormat
       var oDateFormat = DateFormat.getInstance({
         pattern: "dd-MM-yyyy"
       });
-
-      // 3. Format today's date into the string
       var sTodayDate = oDateFormat.format(oToday);
       if (sSavedData) {
         try {
@@ -104,8 +99,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       this.getView()?.setModel(new JSONModel(oData));
       this._loadLocalLogo("img/logo.jpg");
       this._loadSignature("img/Signature.jpg");
-
-      // Setup original visibility views state
       this._updateSectionVisibilities("Quotation");
     },
     _getDefaultFYLabel: function _getDefaultFYLabel() {
@@ -117,41 +110,67 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       return `${iStartFY.toString().substring(2)}-${iEndFY.toString().substring(2)}`;
     },
     _getFirstLineName: function _getFirstLineName(sAddress) {
-      if (!sAddress || sAddress.trim() === "") {
-        return "Document";
-      }
+      if (!sAddress || sAddress.trim() === "") return "Document";
       return sAddress.split("\n")[0].replace(/[/\\?%*:|"<>\s]/g, "_").trim();
     },
-    onGenerateNextInvoiceNumber: function _onGenerateNextInvoiceNumber() {
+    onGenerateNextInvoiceNumber: async function _onGenerateNextInvoiceNumber() {
       const oModel = this.getView()?.getModel();
-      let iNextSequence;
-      let sSuffixFormat;
-      const sIsCustomTriggerActive = localStorage.getItem(this.sCustomTriggerFlag);
-      if (sIsCustomTriggerActive === "X") {
-        iNextSequence = parseInt(localStorage.getItem(this.sCustomNumKey) || "1");
-        sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
-        localStorage.removeItem(this.sCustomTriggerFlag);
-      } else {
-        let iLastSequence = parseInt(localStorage.getItem(this.sCustomNumKey) || "0");
-        iNextSequence = iLastSequence + 1;
-        sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
+      BusyIndicator.show(0);
+      try {
+        let iNextSequence;
+        let sSuffixFormat;
+        const sIsCustomTriggerActive = localStorage.getItem(this.sCustomTriggerFlag);
+        if (sIsCustomTriggerActive === "X") {
+          // A. Local dialog manual override loop
+          iNextSequence = parseInt(localStorage.getItem(this.sCustomNumKey) || "1");
+          sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
+          localStorage.removeItem(this.sCustomTriggerFlag);
+        } else {
+          // B. Fetch the global live record counter from the cloud container
+          const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}/latest`, {
+            method: "GET",
+            headers: {
+              "X-Master-Key": this.sMasterKey
+            }
+          });
+          if (!response.ok) throw new Error("Could not retrieve current sequence from cloud server.");
+          const result = await response.json();
+          const iCurrentSequence = parseInt(result.record.counter) || 0;
+          iNextSequence = iCurrentSequence + 1;
+          sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
+        }
+
+        // C. Push the updated sequential index back up to the cloud repository synchronously
+        const updateResponse = await fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Master-Key": this.sMasterKey
+          },
+          body: JSON.stringify({
+            counter: iNextSequence
+          })
+        });
+        if (!updateResponse.ok) throw new Error("Failed to write updated sequence index block back to database.");
+
+        // D. Keep local backups synchronized
+        localStorage.setItem(this.sCustomNumKey, iNextSequence.toString());
+        const sPaddedSequence = iNextSequence < 10 ? `0${iNextSequence}` : `${iNextSequence}`;
+        const sFinalInvoiceNo = `${sPaddedSequence}${sSuffixFormat}`;
+        oModel.setProperty("/taxHeader/InvoiceNo", sFinalInvoiceNo);
+        MessageToast.show(`Global Invoice generated successfully: ${sFinalInvoiceNo}`);
+      } catch (oError) {
+        MessageBox.error(`Global Counter Error: ${oError.message || oError}`);
+      } finally {
+        BusyIndicator.hide();
       }
-      localStorage.setItem(this.sCustomNumKey, iNextSequence.toString());
-      const sPaddedSequence = iNextSequence < 10 ? `0${iNextSequence}` : `${iNextSequence}`;
-      const sFinalInvoiceNo = `${sPaddedSequence}${sSuffixFormat}`;
-      oModel.setProperty("/taxHeader/InvoiceNo", sFinalInvoiceNo);
-      MessageToast.show(`Invoice generated successfully: ${sFinalInvoiceNo}`);
     },
     onSetGlobalInvoiceSequence: function _onSetGlobalInvoiceSequence() {
       const oModel = this.getView()?.getModel();
-
-      // Create an input control dynamically
       const oInput = new Input({
         placeholder: "e.g., 99/26-27",
         width: "100%"
       });
-
-      // Construct standard dialog container with an integrated text input field
       const oDialog = new Dialog({
         title: "Set Global Invoice Sequence Start Template",
         type: "Message",
@@ -174,12 +193,31 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               return;
             }
             const sExtractedSuffix = aParts.length > 1 ? `/${aParts.slice(1).join("/")}` : `/${this._getDefaultFYLabel()}`;
-            localStorage.setItem(this.sCustomNumKey, iNewSequenceValue.toString());
-            localStorage.setItem(this.sCustomSuffixKey, sExtractedSuffix);
-            localStorage.setItem(this.sCustomTriggerFlag, "X");
-            oModel.setProperty("/taxHeader/InvoiceNo", "");
-            MessageToast.show(`Next Invoice Number sequence configured to begin exactly at: ${sRawInput}`);
-            oDialog.close();
+
+            // Synchronously reset the centralized cloud database tracker value
+            BusyIndicator.show(0);
+            fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Master-Key": this.sMasterKey
+              },
+              body: JSON.stringify({
+                counter: iNewSequenceValue
+              })
+            }).then(res => {
+              if (!res.ok) throw new Error("Database update rejected.");
+              localStorage.setItem(this.sCustomNumKey, iNewSequenceValue.toString());
+              localStorage.setItem(this.sCustomSuffixKey, sExtractedSuffix);
+              localStorage.setItem(this.sCustomTriggerFlag, "X");
+              oModel.setProperty("/taxHeader/InvoiceNo", "");
+              MessageToast.show(`Global sequence reset successfully to: ${sRawInput}`);
+              oDialog.close();
+            }).catch(err => {
+              MessageBox.error(`Cloud Sync Failed: ${err.message}`);
+            }).finally(() => {
+              BusyIndicator.hide();
+            });
           }
         }),
         endButton: new Button({
@@ -452,8 +490,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       }
       const sTargetFilename = this._getFirstLineName(oHeader.To) + "_Quotation.pdf";
       doc.save(sTargetFilename);
-
-      // Also trigger the matching Excel download
       this.onExcelDownload(null, "Quotation");
       this.onGenerateWord("Quotation");
     },
@@ -675,8 +711,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       }
       const sTargetFilename = this._getFirstLineName(oData.taxHeader.To) + "_TaxInvoice.pdf";
       doc.save(sTargetFilename);
-
-      // Also trigger the matching Excel download
       this.onExcelDownload(null, "TAX-INVOICE");
       this.onGenerateWord("TAX-INVOICE");
     },
@@ -811,8 +845,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       }
       const sTargetFilename = this._getFirstLineName(oData.cashHeader.cashTo) + "_CashBill.pdf";
       doc.save(sTargetFilename);
-
-      // Also trigger the matching Excel download
       this.onExcelDownload(null, "Cash Bill");
       this.onGenerateWord("Cash Bill");
     },
@@ -822,16 +854,12 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       let sFileName = "Export.xlsx";
       let headerData = [];
       let itemsData = [];
-
-      // Add explicit Mode metadata row to help processing uploads safely
       headerData.push({
         "FIELD": "MODE_METADATA",
         "VALUE": sSelectMode
       });
       if (sSelectMode === "Quotation") {
         sFileName = this._getFirstLineName(oModel.getProperty("/header/To")) + "_QuotationItems.xlsx";
-
-        // Build key-value mapping rows for header parameters
         headerData.push({
           "FIELD": "Header_To",
           "VALUE": oModel.getProperty("/header/To")
@@ -897,8 +925,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           "FIELD": "TaxHeader_PartyGST",
           "VALUE": oModel.getProperty("/taxHeader/PartyGST")
         });
-        // headerData.push({ "FIELD": "TaxHeader_BankDetails", "VALUE": oModel.getProperty("/taxHeader/BankDetails") });
-
         itemsData = oModel.getProperty("/taxProducts").map(item => ({
           "Particulars": item.taxpProductName,
           "HSN Code": item.taxHSNCode,
@@ -927,16 +953,10 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           "Amount": item.cashAmount
         }));
       }
-
-      // Generate worksheet starting with the custom structural metadata configurations
       const ws = XLSX.utils.json_to_sheet(headerData);
-
-      // Append an empty row for separation space layout
       XLSX.utils.sheet_add_aoa(ws, [[]], {
         origin: -1
       });
-
-      // Append the operational Line Items directly beneath the spacing layer
       XLSX.utils.sheet_add_json(ws, itemsData, {
         origin: -1
       });
@@ -956,35 +976,24 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-
-        // Raw JSON translation captures structural definitions natively
         const rawJsonRows = XLSX.utils.sheet_to_json(worksheet, {
           header: 1
         });
         const sSelectMode = (this.getView()?.byId("mySelect")).getSelectedItem()?.getText();
         const oModel = this.getView()?.getModel();
-
-        // Differentiate header map items from structural matrix lines
         const headerMap = {};
         let lineItemsStartIndex = 0;
         for (let i = 0; i < rawJsonRows.length; i++) {
           const row = rawJsonRows[i];
           if (row && row[0] && typeof row[0] === 'string' && (row[0].includes("Header") || row[0] === "FIELD" || row[0] === "MODE_METADATA")) {
-            if (row[0] !== "FIELD") {
-              headerMap[row[0]] = row[1] || "";
-            }
+            if (row[0] !== "FIELD") headerMap[row[0]] = row[1] || "";
           } else {
-            // Blank row spacing found or data rows began
             lineItemsStartIndex = i;
             break;
           }
         }
-
-        // Slice out the remaining block data rows and convert using original object property mapping arrays
         const lineItemsRows = rawJsonRows.slice(lineItemsStartIndex).filter(row => row && row.length > 0);
         if (lineItemsRows.length === 0) return;
-
-        // Extract table headers dynamically from array configuration parameters
         const tableHeaders = lineItemsRows[0];
         const jsonDataItems = lineItemsRows.slice(1).map(row => {
           const obj = {};
@@ -994,7 +1003,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           return obj;
         });
         if (sSelectMode === "Quotation") {
-          // Restore Header Properties safely back into JSON Model path mappings
           if (headerMap["Header_To"]) oModel.setProperty("/header/To", headerMap["Header_To"]);
           if (headerMap["Header_Date"]) oModel.setProperty("/header/Date", headerMap["Header_Date"]);
           if (headerMap["Header_Subject"]) oModel.setProperty("/header/Subject", headerMap["Header_Subject"]);
@@ -1019,8 +1027,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           if (headerMap["TaxHeader_PONo"]) oModel.setProperty("/taxHeader/PONo", headerMap["TaxHeader_PONo"]);
           if (headerMap["TaxHeader_PODate"]) oModel.setProperty("/taxHeader/PODate", headerMap["TaxHeader_PODate"]);
           if (headerMap["TaxHeader_PartyGST"]) oModel.setProperty("/taxHeader/PartyGST", headerMap["TaxHeader_PartyGST"]);
-          // if (headerMap["TaxHeader_BankDetails"]) oModel.setProperty ("/taxHeader/BankDetails", headerMap["TaxHeader_BankDetails"]);
-
           const parsedTax = jsonDataItems.map(row => ({
             taxpProductName: row["Particulars"] || "",
             taxHSNCode: row["HSN Code"]?.toString() || "",
@@ -1082,38 +1088,23 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       }
       return result.trim();
     },
-    /**
-     * Triggered when the value help icon inside the Input field is clicked
-     */
     onHSNValueHelpRequest: async function _onHSNValueHelpRequest(oEvent) {
-      // Store reference to the source input control to set the value later
       const oInput = oEvent.getSource();
       this.getView()?.data("valueHelpSourceInput", oInput);
-
-      // Load the XML Fragment asynchronously
       if (!this._pDialog) {
         this._pDialog = Fragment.load({
           id: this.getView()?.getId(),
           name: "my.app.generatebill.view.HSNValueHelpDialog",
           controller: this
         });
-
-        // Connect dialog to the lifecycle of the view
         const oDialog = await this._pDialog;
         this.getView()?.addDependent(oDialog);
       }
       const oDialog = await this._pDialog;
-
-      // Ensure all rows are shown initially by resetting filters on open
       const oBinding = oDialog.getBinding("items");
-      if (oBinding) {
-        oBinding.filter([]);
-      }
+      if (oBinding) oBinding.filter([]);
       oDialog.open("");
     },
-    /**
-     * Handles search option for all columns (HSN_CD and HSN_Description)
-     */
     onHSNValueHelpSearch: function _onHSNValueHelpSearch(oEvent) {
       const sValue = oEvent.getParameter("value");
       const oDialog = oEvent.getSource();
@@ -1122,12 +1113,8 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         oBinding.filter([]);
         return;
       }
-
-      // Create individual filters matching case-insensitive substrings
       const oFilterCode = new Filter("HSN_CD", FilterOperator.Contains, sValue);
       const oFilterDesc = new Filter("HSN_Description", FilterOperator.Contains, sValue);
-
-      // Combine using 'false' flag for OR operator to query both columns simultaneously
       const oCombinedFilter = new Filter({
         filters: [oFilterCode, oFilterDesc],
         and: false
@@ -1137,16 +1124,10 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
     onHSNValueHelpConfirm: function _onHSNValueHelpConfirm(oEvent) {
       const oSelectedItem = oEvent.getParameter("selectedItem");
       const oInput = this.getView()?.data("valueHelpSourceInput");
-      if (!oSelectedItem) {
-        return;
-      }
-
-      // Get the structural bound context object properties
+      if (!oSelectedItem) return;
       const oContext = oSelectedItem.getBindingContext("hsnModel");
       if (oContext) {
         const sSelectedCode = oContext.getProperty("HSN_CD");
-
-        // Populate value to your Input element
         oInput.setValue(sSelectedCode);
       }
     },
@@ -1165,14 +1146,10 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       let sDocIdentifier = "";
       let sRawAddressText = "";
       let sTargetFilename = "Document.pdf";
-
-      // 1. Instantiating a temporary jsPDF instance to generate the specific file bytes
       const doc = new jspdfLib.jsPDF();
       const pageWidth = doc.internal.pageSize.width;
       const pageHeight = doc.internal.pageSize.height;
       const margin = 5;
-
-      // Apply standard border framing
       doc.setDrawColor(0, 0, 0);
       doc.setLineWidth(0.3);
       doc.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
@@ -1197,8 +1174,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         align: 'right'
       });
       doc.line(5, 40, pageWidth - 5, 40);
-
-      // 2. Replicate your specific document generation logic conditionally
       if (sSelectMode === "Quotation") {
         const oHeader = oModel.getProperty("/header");
         const aItems = oModel.getProperty("/products");
@@ -1378,14 +1353,10 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       if (this.sSignaturBase64) {
         doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 40, 70, 25);
       }
-
-      // 3. Extract the PDF as an array buffer blob instead of downloading immediately
       const blobHTML5 = doc.output('blob');
       const pdfFile = new File([blobHTML5], sTargetFilename, {
         type: 'application/pdf'
       });
-
-      // 4. Verify if the host browser device environment supports shared attachments natively
       if (navigator.canShare && navigator.canShare({
         files: [pdfFile]
       })) {
@@ -1400,13 +1371,10 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           MessageBox.error("Sharing processing was cancelled or encountered an error.");
         }
       } else {
-        // Fallback for non-supported browsers (Desktop Chrome / Legacy Environments)
         MessageBox.information("Direct file attachment is not supported on this browser window configuration. The PDF file will be downloaded onto your local system shelf. You can drag and drop it into your WhatsApp target chat window manually.", {
           title: "Browser Sharing Limitation",
           onClose: () => {
             doc.save(sTargetFilename);
-
-            // Fall back to opening the standard text api thread link
             const aPhoneMatch = sRawAddressText.match(/(?:(?:\+91)|91)?\s*([6-9]\d{9})\b/);
             let sTargetPhone = aPhoneMatch ? "91" + aPhoneMatch[1] : "";
             const sMessageText = `Hello ${sClientName},\n\nYour *${sDocIdentifier}* from *IN-TELECOM SERVICES* is ready.\n\n*Amount Due:* Rs. ${sTotalAmount}`;
@@ -1416,7 +1384,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       }
     },
     onGenerateWord: async function _onGenerateWord(sMode) {
-      // 1. Asynchronously initialize the browser-compatible docxtemplater and PizZip bundles
       if (!window.docxtemplater) {
         try {
           await new Promise((resolve, reject) => {
@@ -1444,8 +1411,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       let sTemplatePath = "";
       let sTargetFilename = "";
       let oTemplateDataMap = {};
-
-      // 2. Map dataset payloads dynamically based on visibility modes
       if (sMode === "Quotation") {
         sTemplatePath = "my/app/generatebill/model/Quotation_Template.docx";
         sTargetFilename = this._getFirstLineName(oData.header.To) + "_Quotation.docx";
@@ -1515,24 +1480,17 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         };
       }
       try {
-        // 3. Load the template binary from your webapp model layer via XMLHttpRequest
         const sTemplateUrl = sap.ui.require.toUrl(sTemplatePath);
         const response = await fetch(sTemplateUrl);
         if (!response.ok) throw new Error("Could not fetch the specified Word template.");
         const arrayBuffer = await response.arrayBuffer();
         const zip = new PizZip(arrayBuffer);
-
-        // 4. Initialize docxtemplater on the loaded archive context
         const doc = new Docxtemplater(zip, {
           paragraphLoop: true,
           linebreaks: true
         });
-
-        // 5. Render fields dynamically
         doc.setData(oTemplateDataMap);
         doc.render();
-
-        // 6. Extract the document blob stream and trigger instant browser download
         const outBlob = doc.getZip().generate({
           type: "blob",
           mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
