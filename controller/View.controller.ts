@@ -1442,7 +1442,7 @@ export default class View extends Controller {
                         text: "Modify", icon: "sap-icon://edit", type: "Default",
                         press: () => {
                             const aSelected = oDeleteTable.getSelectedItems();
-                            if (aSelected.length === 0) { sap.m.MessageToast.show("Please check target rows first."); return; }
+                            if (aSelected.length === 0) { sap.m.MessageToast.show("Please select one item."); return; }
                             aSelected.forEach((oItem: any) => oItem.getBindingContext().setProperty("isEditable", true));
                             oSelectionModel.refresh(true);
                         }
@@ -1605,7 +1605,7 @@ export default class View extends Controller {
                 columns: [
                     new sap.m.Column({ header: new sap.m.Label({ text: "Profile Client Name", design: "Bold" }), width: "40%" }),
                     new sap.m.Column({ header: new sap.m.Label({ text: "Contact Details", design: "Bold" }), width: "30%" }),
-                    new sap.m.Column({ header: new sap.m.Label({ text: "GSTIN Identification", design: "Bold" }), width: "30%" })
+                    new sap.m.Column({ header: new sap.m.Label({ text: "Customer GST No", design: "Bold" }), width: "30%" })
                 ]
             });
 
@@ -1623,7 +1623,7 @@ export default class View extends Controller {
 
             // FIX: We declare the layout instance shell first, allowing button bindings to resolve it safely later
             const oDirectoryDialog = new sap.m.Dialog({
-                title: "Customer Registry Search-Help Workspace",
+                title: "Customer Registry",
                 contentWidth: "620px",
                 contentHeight: "500px",
                 content: [oCustTable],
@@ -1655,7 +1655,7 @@ export default class View extends Controller {
                 text: "Edit", icon: "sap-icon://edit", type: "Attention",
                 press: () => {
                     const oSelectedRow = oCustTable.getSelectedItem();
-                    if (!oSelectedRow) { sap.m.MessageToast.show("Please select a target profile record line item."); return; }
+                    if (!oSelectedRow) { sap.m.MessageToast.show("Please select a record."); return; }
                     this._openCustomerFormWorkspace(aCustomers, oDirectoryDialog, oSelectedRow.getBindingContext().getObject());
                 }
             }));
@@ -1664,7 +1664,7 @@ export default class View extends Controller {
                 text: "Delete", icon: "sap-icon://delete", type: "Reject",
                 press: () => {
                     const oSelectedRow = oCustTable.getSelectedItem();
-                    if (!oSelectedRow) { sap.m.MessageToast.show("Please check a target row first."); return; }
+                    if (!oSelectedRow) { sap.m.MessageToast.show("Please select a record."); return; }
                     this._deleteCustomerRecordDirect(aCustomers, oSelectedRow.getBindingContext().getObject(), oDirectoryDialog);
                 }
             }));
@@ -1678,7 +1678,7 @@ export default class View extends Controller {
                 text: "Inject", type: "Emphasized", icon: "sap-icon://accept",
                 press: () => {
                     const oSelectedRow = oCustTable.getSelectedItem();
-                    if (!oSelectedRow) { sap.m.MessageToast.show("Please check a row line item first."); return; }
+                    if (!oSelectedRow) { sap.m.MessageToast.show("Please select a record."); return; }
                     this._autoFillCustomerInputs(oSelectedRow.getBindingContext().getObject());
                     oDirectoryDialog.close();
                 }
@@ -1723,7 +1723,7 @@ export default class View extends Controller {
         const oAddr = new sap.m.TextArea({ placeholder: "Billing address maps", rows: 3, width: "100%", value: bIsEditMode ? oExistingCustToEdit.address : "" });
 
         const oFormDialog = new Dialog({
-            title: bIsEditMode ? "Modify Client Profile" : "Register Profile Record Workspace",
+            title: bIsEditMode ? "Modify Client Profile" : "Register New Client Profile",
             contentWidth: "380px",
             content: [new sap.m.VBox({ items: [new sap.m.Label({ text: "Profile Customer Name*", design: "Bold" }), oName, new sap.m.Label({ text: "Contact Number Link*", design: "Bold" }), oPhone, new sap.m.Label({ text: "Customer GST No" }), oGst, new sap.m.Label({ text: "Street Level Address Details" }), oAddr] }).addStyleClass("sapUiContentPadding")],
             buttons: [

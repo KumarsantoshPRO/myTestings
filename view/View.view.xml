@@ -19,12 +19,14 @@
                 objectSubtitle="GSTIN: 29AGKPP7288F1Z0"
             >
                 <Button
-                    icon="sap-icon://add"
+                    icon="sap-icon://customer-briefing"
                     press="onOpenCustomerDirectory"
                     type="Transparent"
                     tooltip="Add new customer"
+                    text="Customer Directory"
                 />
                 <Button
+                    text="Analytics"
                     icon="sap-icon://bar-chart"
                     press="onShowAnalyticsGraph"
                     type="Emphasized"

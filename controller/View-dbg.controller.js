@@ -1945,7 +1945,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             press: () => {
               const aSelected = oDeleteTable.getSelectedItems();
               if (aSelected.length === 0) {
-                sap.m.MessageToast.show("Please check target rows first.");
+                sap.m.MessageToast.show("Please select one item.");
                 return;
               }
               aSelected.forEach(oItem => oItem.getBindingContext().setProperty("isEditable", true));
@@ -2217,7 +2217,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             width: "30%"
           }), new sap.m.Column({
             header: new sap.m.Label({
-              text: "GSTIN Identification",
+              text: "Customer GST No",
               design: "Bold"
             }),
             width: "30%"
@@ -2239,7 +2239,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
 
         // FIX: We declare the layout instance shell first, allowing button bindings to resolve it safely later
         const oDirectoryDialog = new sap.m.Dialog({
-          title: "Customer Registry Search-Help Workspace",
+          title: "Customer Registry",
           contentWidth: "620px",
           contentHeight: "500px",
           content: [oCustTable],
@@ -2273,7 +2273,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           press: () => {
             const oSelectedRow = oCustTable.getSelectedItem();
             if (!oSelectedRow) {
-              sap.m.MessageToast.show("Please select a target profile record line item.");
+              sap.m.MessageToast.show("Please select a record.");
               return;
             }
             this._openCustomerFormWorkspace(aCustomers, oDirectoryDialog, oSelectedRow.getBindingContext().getObject());
@@ -2286,7 +2286,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           press: () => {
             const oSelectedRow = oCustTable.getSelectedItem();
             if (!oSelectedRow) {
-              sap.m.MessageToast.show("Please check a target row first.");
+              sap.m.MessageToast.show("Please select a record.");
               return;
             }
             this._deleteCustomerRecordDirect(aCustomers, oSelectedRow.getBindingContext().getObject(), oDirectoryDialog);
@@ -2308,7 +2308,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           press: () => {
             const oSelectedRow = oCustTable.getSelectedItem();
             if (!oSelectedRow) {
-              sap.m.MessageToast.show("Please check a row line item first.");
+              sap.m.MessageToast.show("Please select a record.");
               return;
             }
             this._autoFillCustomerInputs(oSelectedRow.getBindingContext().getObject());
@@ -2365,7 +2365,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         value: bIsEditMode ? oExistingCustToEdit.address : ""
       });
       const oFormDialog = new Dialog({
-        title: bIsEditMode ? "Modify Client Profile" : "Register Profile Record Workspace",
+        title: bIsEditMode ? "Modify Client Profile" : "Register New Client Profile",
         contentWidth: "380px",
         content: [new sap.m.VBox({
           items: [new sap.m.Label({
