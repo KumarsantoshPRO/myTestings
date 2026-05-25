@@ -1,4 +1,4 @@
-sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap/m/MessageBox", "sap/m/MessageToast", "sap/m/Button", "sap/m/Dialog", "sap/m/Input", "sap/m/Text", "sap/ui/core/Fragment", "sap/ui/model/Filter", "sap/ui/model/FilterOperator", "sap/ui/core/format/DateFormat", "sap/ui/core/BusyIndicator"], function (Controller, JSONModel, MessageBox, MessageToast, Button, Dialog, Input, Text, Fragment, Filter, FilterOperator, DateFormat, BusyIndicator) {
+sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap/m/MessageBox", "sap/m/MessageToast", "sap/m/Select", "sap/m/Button", "sap/m/Dialog", "sap/m/Input", "sap/m/Text", "sap/m/Label", "sap/m/VBox", "sap/m/Column", "sap/ui/core/Item", "sap/ui/core/Fragment", "sap/ui/model/Filter", "sap/ui/model/FilterOperator", "sap/m/ColumnListItem", "sap/ui/core/format/DateFormat", "sap/ui/core/BusyIndicator"], function (Controller, JSONModel, MessageBox, MessageToast, Select, Button, Dialog, Input, Text, Label, VBox, Column, Item, Fragment, Filter, FilterOperator, ColumnListItem, DateFormat, BusyIndicator) {
   "use strict";
 
   const formatINR = amount => {
@@ -17,16 +17,18 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       this.sSignaturBase64 = "";
       this.sStorageKey = "my_billing_app_draft_data";
       this.sSequenceKey = "my_billing_app_invoice_seq_counter";
-      // Centralized Cloud Analytics Configuration
+      // Centralized Cloud Configuration Storage Pointers
       this.sAnalyticsBinId = "6a1015ed6877513b27b3681c";
+      this.sBinId = "6a0ffb516610dd3ae8873764";
+      this.sCustomerBinId = "6a1415b26877513b27cc8043";
+      // Dedicated Customer Registry Cloud Database Bucket
+      this.sMasterKey = "$2a$10$QW2jbDsLe9nN3eAqSzg6v.Zz3jHv6WQfDk.HLgm4T3V0uvumxbx8i";
       // Storage Keys for Custom Template Tracking
       this.sCustomNumKey = "my_billing_app_custom_numeric_seq";
       this.sCustomSuffixKey = "my_billing_app_custom_suffix_format";
       this.sCustomTriggerFlag = "my_billing_app_use_custom_start_flag";
-      // CENTRALIZED CLOUD STORAGE CONFIGURATION (jsonbin.io)
-      // Replace these placeholder strings with your actual keys from Step 1
-      this.sBinId = "6a0ffb516610dd3ae8873764";
-      this.sMasterKey = "$2a$10$QW2jbDsLe9nN3eAqSzg6v.Zz3jHv6WQfDk.HLgm4T3V0uvumxbx8i";
+      // Global Overlay Trackers for Automated Cascade Closures
+      this.oMainAnalyticsDialog = null;
     },
     onInit: function _onInit() {
       let oData;
@@ -52,6 +54,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             AddtionalInfo: "",
             Notes: "",
             TermsAndConditions: "",
+            LeadSource: "Direct",
             BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
           },
           products: [{
@@ -69,6 +72,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             PONo: "",
             PODate: "",
             PartyGST: "",
+            LeadSource: "Direct",
             BankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
           },
           taxProducts: [{
@@ -82,6 +86,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           cashHeader: {
             cashTo: "",
             cashDate: sTodayDate,
+            LeadSource: "Direct",
             cashbankDetails: "Payment Mode: Via Online\nBank: State Bank of India,\nBranch: Mallathahalli Branch\nName: In - Telecom Services\nC/A No: 64064045533\nIFSC Code: SBIN0040457"
           },
           cashProducts: [{
@@ -123,12 +128,10 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         let sSuffixFormat;
         const sIsCustomTriggerActive = localStorage.getItem(this.sCustomTriggerFlag);
         if (sIsCustomTriggerActive === "X") {
-          // A. Local dialog manual override loop
           iNextSequence = parseInt(localStorage.getItem(this.sCustomNumKey) || "1");
           sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
           localStorage.removeItem(this.sCustomTriggerFlag);
         } else {
-          // B. Fetch the global live record counter from the cloud container
           const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}/latest`, {
             method: "GET",
             headers: {
@@ -141,8 +144,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           iNextSequence = iCurrentSequence + 1;
           sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
         }
-
-        // C. Push the updated sequential index back up to the cloud repository synchronously
         const updateResponse = await fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}`, {
           method: "PUT",
           headers: {
@@ -154,8 +155,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           })
         });
         if (!updateResponse.ok) throw new Error("Failed to write updated sequence index block back to database.");
-
-        // D. Keep local backups synchronized
         localStorage.setItem(this.sCustomNumKey, iNextSequence.toString());
         const sPaddedSequence = iNextSequence < 10 ? `0${iNextSequence}` : `${iNextSequence}`;
         const sFinalInvoiceNo = `${sPaddedSequence}${sSuffixFormat}`;
@@ -195,8 +194,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               return;
             }
             const sExtractedSuffix = aParts.length > 1 ? `/${aParts.slice(1).join("/")}` : `/${this._getDefaultFYLabel()}`;
-
-            // Synchronously reset the centralized cloud database tracker value
             BusyIndicator.show(0);
             fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}`, {
               method: "PUT",
@@ -496,7 +493,8 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       this.onExcelDownload(null, "Quotation");
       this.onGenerateWord("Quotation");
       const sClient = this._getFirstLineName(oHeader.To);
-      this._logDocumentAnalytics("Quotation", sTargetFilename, sClient, grandTotal);
+      const sSelLead = oHeader.LeadSource || "Direct"; // Captured but excluded from final printed PDF outputs
+      this._logDocumentAnalytics("Quotation", sTargetFilename, sClient, grandTotal, sSelLead);
     },
     onTaxAddRow: function _onTaxAddRow() {
       const oModel = this.getView()?.getModel();
@@ -720,7 +718,8 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       this.onExcelDownload(null, "TAX-INVOICE");
       this.onGenerateWord("TAX-INVOICE");
       const sClient = this._getFirstLineName(oData.taxHeader.To);
-      this._logDocumentAnalytics("TAX-INVOICE", oData.taxHeader.InvoiceNo, sClient, grandTotal);
+      const sSelLead = oData.taxHeader.LeadSource || "Direct";
+      this._logDocumentAnalytics("TAX-INVOICE", oData.taxHeader.InvoiceNo, sClient, grandTotal, sSelLead);
     },
     onCashAddRow: function _onCashAddRow() {
       const oModel = this.getView()?.getModel();
@@ -857,7 +856,8 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       this.onExcelDownload(null, "Cash Bill");
       this.onGenerateWord("Cash Bill");
       const sClient = this._getFirstLineName(oData.cashHeader.cashTo);
-      this._logDocumentAnalytics("Cash Bill", sTargetFilename, sClient, totalAmount);
+      const sSelLead = oData.cashHeader.LeadSource || "Direct";
+      this._logDocumentAnalytics("Cash Bill", sTargetFilename, sClient, totalAmount, sSelLead);
     },
     onExcelDownload: function _onExcelDownload(oEvent, sOverrideMode) {
       const sSelectMode = sOverrideMode || (this.getView()?.byId("mySelect")).getSelectedItem()?.getText();
@@ -1266,6 +1266,8 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           finalY += 20;
           doc.text(doc.splitTextToSize(oHeader.BankDetails, pageWidth - 28), 14, finalY + 4);
         }
+        const sSelLead = oHeader.LeadSource || "Direct";
+        this._logDocumentAnalytics("Quotation", sTargetFilename, sClientName, grandTotal, sSelLead);
       } else if (sSelectMode === "TAX-INVOICE") {
         const oData = oModel.getData();
         sRawAddressText = oData.taxHeader.To || "";
@@ -1322,6 +1324,8 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         });
         const finalY = doc.lastAutoTable.finalY + 5;
         doc.text(`Rupees in words: ${this.numberToWords(grandTotal)} Only`, 10, finalY + 10);
+        const sSelLead = oData.taxHeader.LeadSource || "Direct";
+        this._logDocumentAnalytics("TAX-INVOICE", oData.taxHeader.InvoiceNo, sClientName, grandTotal, sSelLead);
       } else {
         const oData = oModel.getData();
         sRawAddressText = oData.cashHeader.cashTo || "";
@@ -1360,6 +1364,8 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           body: tableRows,
           theme: 'grid'
         });
+        const sSelLead = oData.cashHeader.LeadSource || "Direct";
+        this._logDocumentAnalytics("Cash Bill", sTargetFilename, sClientName, totalAmount, sSelLead);
       }
       if (this.sSignaturBase64) {
         doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 40, 70, 25);
@@ -1518,15 +1524,10 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       }
     },
     /**
-    * Asynchronously captures basic billing metrics and posts them to the dedicated analytics bin
-    * @param {string} sDocType The category of document ("Quotation" | "TAX-INVOICE" | "Cash Bill")
-    * @param {string} sDocNo Generated identification string
-    * @param {string} sClient Target client name
-    * @param {number} fAmount Grand total invoice revenue
-    */
-    _logDocumentAnalytics: async function _logDocumentAnalytics(sDocType, sDocNo, sClient, fAmount) {
+     * Asynchronously logs analytical metrics into the server container.
+     */
+    _logDocumentAnalytics: async function _logDocumentAnalytics(sDocType, sDocNo, sClient, fAmount, sLeadSource) {
       try {
-        // 1. Fetch the existing collection matrix from the cloud bin
         const oGetResponse = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}/latest`, {
           method: "GET",
           headers: {
@@ -1536,9 +1537,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         if (!oGetResponse.ok) throw new Error("Failed to read analytical historical logs.");
         const oGetResult = await oGetResponse.json();
         const aHistory = oGetResult.record.records || [];
-
-        // 2. Append the new structured transaction item details
-        // Inside your _logDocumentAnalytics method, enhance the object pushed to aHistory:
         const oDate = new Date();
         const aMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         aHistory.push({
@@ -1546,13 +1544,12 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           type: sDocType,
           client: sClient,
           amount: fAmount,
+          lead: sLeadSource,
+          // Embedded parameter mapping
           timestamp: oDate.toISOString(),
           month: aMonths[oDate.getMonth()],
-          // Stores e.g., "May"
-          year: oDate.getFullYear().toString() // Stores e.g., "2026"
+          year: oDate.getFullYear().toString()
         });
-
-        // 3. Commit the updated history collection block back to your cloud data container
         await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
           method: "PUT",
           headers: {
@@ -1567,38 +1564,26 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         console.error("Background analytical tracking logging engine failed: ", oError);
       }
     },
-    /**
-    * Fetches analytical transaction logs from your cloud database bin and presents
-    * an interactive dashboard, complete with automated daily limits, storage thresholds, and API cap alerts.
-    */
+    // =========================================================================
+    // REVENUE REFACTORING WORKSPACE INTERFACES (UPDATED CRUD LAYOUT DATA)
+    // =========================================================================
     onShowAnalyticsGraph: async function _onShowAnalyticsGraph() {
-      // =========================================================================
-      // NEW: LOCAL DAILY LIMIT SPEED BUMP TRACKER (Max 50 views per day)
-      // =========================================================================
-      const sTodayDateKey = new Date().toDateString(); // e.g., "Fri May 22 2026"
+      const sTodayDateKey = new Date().toDateString();
       const sStoredDate = localStorage.getItem("analytics_view_date");
       let iDailyCount = parseInt(localStorage.getItem("analytics_daily_count") || "0", 10);
       if (sStoredDate === sTodayDateKey) {
-        // If we are still on the same calendar day, check the threshold counter
         if (iDailyCount >= 50) {
-          sap.m.MessageBox.error(`Daily View Limit Reached: You have opened the analytics dashboard 50 times today. To protect your free tier API limit, further loads are restricted until tomorrow.`, {
-            title: "Daily Limit Speed-Bump"
-          });
-          return; // STOP EXECUTION IMMEDIATELY - Bypasses jsonbin completely
+          sap.m.MessageBox.error(`Daily View Limit Reached: You have opened the analytics dashboard 50 times today.`);
+          return;
         }
-        // Increment count locally
         iDailyCount++;
         localStorage.setItem("analytics_daily_count", iDailyCount.toString());
       } else {
-        // If it's a new calendar day, reset the counter variables back to 1
         localStorage.setItem("analytics_view_date", sTodayDateKey);
         localStorage.setItem("analytics_daily_count", "1");
       }
-
-      // Proceed with cloud initialization if under the 50-click boundary limit
       sap.ui.core.BusyIndicator.show(0);
       try {
-        // 1. Fetch live transaction data history from jsonbin
         const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}/latest`, {
           method: "GET",
           headers: {
@@ -1606,32 +1591,21 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           }
         });
         if (!response.ok) throw new Error("Could not retrieve analytical transaction entries.");
-
-        // LOGIC 2: API Request Limit Warning (Triggers if monthly limit hits 9000+)
         const sLimitHeader = response.headers.get("x-ratelimit-limit");
         const sRemainingHeader = response.headers.get("x-ratelimit-remaining");
         if (sLimitHeader && sRemainingHeader) {
           const iTotalLimit = parseInt(sLimitHeader, 10);
           const iRemaining = parseInt(sRemainingHeader, 10);
-          const iConsumedRequests = iTotalLimit - iRemaining;
-          if (iConsumedRequests >= 9000) {
-            sap.m.MessageBox.warning(`Critical API Consumption Warning: You have utilized ${iConsumedRequests} out of your ${iTotalLimit} free monthly API requests.`, {
-              title: "API Threshold Alert"
-            });
+          if (iTotalLimit - iRemaining >= 9000) {
+            sap.m.MessageBox.warning(`Critical API Consumption Warning: Monthly usage threshold exceeded.`);
           }
         }
         const result = await response.json();
         const aRecords = result.record.records || [];
-
-        // LOGIC 1: Document Storage Capacity Reminder (Triggers at 60+ entries)
         if (aRecords.length >= 60) {
-          sap.m.MessageBox.information(`Storage Optimization Notice: Your cloud analytics history currently holds ${aRecords.length} documents and is approaching its free capacity boundary (70 max).`, {
-            title: "Storage Reminder Alert"
-          });
+          sap.m.MessageBox.information(`Storage Optimization Notice: Current ledger contains ${aRecords.length} entries.`);
         }
         const oHtmlMetricsDashboard = new sap.ui.core.HTML();
-
-        // Calculate rolling calendar year strings dynamically (Current Year, -1, -2)
         const iCurrentYear = new Date().getFullYear();
         const sYearCurrent = iCurrentYear.toString();
         const sYearMinus1 = (iCurrentYear - 1).toString();
@@ -1649,7 +1623,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             text: sYearMinus1
           }), new sap.ui.core.Item({
             key: sYearCurrent,
-            text: `${sYearCurrent} (Current Year)`
+            text: sYearCurrent
           })]
         });
         const oMonthSelect = new sap.m.Select({
@@ -1662,22 +1636,38 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             text: sM
           }))]
         });
+        const oLeadSelect = new sap.m.Select({
+          selectedKey: "ALL",
+          items: [new sap.ui.core.Item({
+            key: "ALL",
+            text: "All Leads"
+          }), new sap.ui.core.Item({
+            key: "Justdial",
+            text: "Justdial"
+          }), new sap.ui.core.Item({
+            key: "Sulekha",
+            text: "Sulekha"
+          }), new sap.ui.core.Item({
+            key: "Direct",
+            text: "Direct"
+          })]
+        });
         const oFilterToolbar = new sap.m.HBox({
           width: "100%",
           justifyContent: "SpaceBetween",
-          items: [oYearSelect, oMonthSelect]
+          items: [oYearSelect, oMonthSelect, oLeadSelect]
         }).addStyleClass("sapUiSmallMarginBottom");
-
-        // Core calculation engine loop to process dropdown selections reactively
         const fnFilterAndRefreshDashboard = () => {
           const sSelYear = oYearSelect.getSelectedKey();
           const sSelMonth = oMonthSelect.getSelectedKey();
+          const sSelLead = oLeadSelect.getSelectedKey();
           const aFiltered = aRecords.filter(rec => {
             const oDate = new Date(rec.timestamp);
             const aMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
             const sRowYear = rec.year || oDate.getFullYear().toString();
             const sRowMonth = rec.month || aMonths[oDate.getMonth()];
-            return (sSelYear === "ALL" || sRowYear === sSelYear) && (sSelMonth === "ALL" || sRowMonth === sSelMonth);
+            const sRowLead = rec.lead || "Direct";
+            return (sSelYear === "ALL" || sRowYear === sSelYear) && (sSelMonth === "ALL" || sRowMonth === sSelMonth) && (sSelLead === "ALL" || sRowLead.toLowerCase() === sSelLead.toLowerCase());
           });
           let fQuoteTotal = 0,
             fTaxTotal = 0,
@@ -1716,9 +1706,12 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         oMonthSelect.attachChange(() => {
           fnFilterAndRefreshDashboard();
         });
+        oLeadSelect.attachChange(() => {
+          fnFilterAndRefreshDashboard();
+        });
         fnFilterAndRefreshDashboard();
-        const oDialog = new Dialog({
-          contentWidth: "420px",
+        this.oMainAnalyticsDialog = new Dialog({
+          contentWidth: "440px",
           customHeader: new sap.m.Bar({
             contentLeft: [new sap.m.Title({
               text: "Business Revenue Analytics Dashboard"
@@ -1727,7 +1720,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               icon: "sap-icon://decline",
               type: "Transparent",
               press: () => {
-                oDialog.close();
+                this.oMainAnalyticsDialog?.close();
               }
             })]
           }),
@@ -1750,73 +1743,36 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             }
           })],
           afterClose: () => {
-            oDialog.destroy();
+            this.oMainAnalyticsDialog?.destroy();
+            this.oMainAnalyticsDialog = null;
           }
         });
-        oDialog.open();
+        this.oMainAnalyticsDialog.open();
       } catch (err) {
-        sap.m.MessageBox.error(`Analytics Dashboard Generation Fault: ${err.message || err}`);
+        sap.m.MessageBox.error(`Analytics Dashboard Fault: ${err.message || err}`);
       } finally {
         sap.ui.core.BusyIndicator.hide();
       }
     },
-    /**
-    * Formats data history logs and triggers a clean Excel spreadsheet export with localized Indian Standard Timestamps.
-    */
-    _downloadAnalyticsExcel: function _downloadAnalyticsExcel(aRecords) {
-      if (!aRecords || aRecords.length === 0) {
-        sap.m.MessageToast.show("No transaction records available to export.");
-        return;
-      }
-      const aExcelRows = aRecords.map(rec => {
-        let sFormattedIST = "";
-        if (rec.timestamp) {
-          const oDate = new Date(rec.timestamp);
-          const sDay = String(oDate.getDate()).padStart(2, '0');
-          const sMonth = String(oDate.getMonth() + 1).padStart(2, '0');
-          const sYear = oDate.getFullYear();
-          const sHours = String(oDate.getHours()).padStart(2, '0');
-          const sMins = String(oDate.getMinutes()).padStart(2, '0');
-          const sSecs = String(oDate.getSeconds()).padStart(2, '0');
-          sFormattedIST = `${sDay}-${sMonth}-${sYear} ${sHours}:${sMins}:${sSecs}`;
-        }
-        return {
-          "Document ID": rec.id,
-          "Document Type": rec.type,
-          "Client / Customer Name": rec.client,
-          "Grand Total (Rs.)": rec.amount,
-          "Date and Time (IST)": sFormattedIST
-        };
-      });
-      const ws = XLSX.utils.json_to_sheet(aExcelRows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Revenue Overview");
-      XLSX.writeFile(wb, "Business_Analytics_Summary.xlsx");
-      sap.m.MessageToast.show("Analytics data exported to Excel successfully!");
-    },
-    /**
-     * Step 1 (Multi-Step): Asks for authorization password. If valid, passes selected month/year filters to the table box.
-     */
     _verifyAdminPasswordBeforeManage: function _verifyAdminPasswordBeforeManage(sTargetYear, sTargetMonth) {
       const sMasterPassword = "clearMe@22";
       const oPasswordInput = new sap.m.Input({
         type: sap.m.InputType.Password,
-        placeholder: "Enter admin password to manage records",
+        placeholder: "Enter admin credentials",
         width: "100%"
       });
       const oSecurityDialog = new Dialog({
         title: "Security Verification",
         type: "Message",
-        state: "Warning",
         content: [new sap.m.Text({
-          text: "Please enter the master administrative password to open log data erasure management:"
+          text: "Please provide admin master authorization password:"
         }), oPasswordInput],
         beginButton: new sap.m.Button({
           text: "Verify",
           type: "Accept",
           press: () => {
             if (oPasswordInput.getValue() !== sMasterPassword) {
-              sap.m.MessageBox.error("Authentication Failed! Access denied.");
+              sap.m.MessageBox.error("Authentication Failed!");
               oPasswordInput.setValue("");
               return;
             }
@@ -1832,10 +1788,6 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
       });
       oSecurityDialog.open();
     },
-    /**
-     * Step 2 (Multi-Step): Displays checkboxes table showing ONLY the entries matching the active Month/Year filter.
-     * Injects formatted Indian Standard Time strings directly into the data matrix row templates.
-     */
     _openGranularDeletionWorkspace: async function _openGranularDeletionWorkspace(sTargetYear, sTargetMonth) {
       sap.ui.core.BusyIndicator.show(0);
       try {
@@ -1845,34 +1797,27 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             "X-Master-Key": this.sMasterKey
           }
         });
-        if (!response.ok) throw new Error("Could not retrieve current cloud logs.");
         const result = await response.json();
         const aMasterRecords = result.record.records || [];
-
-        // Filter records based on selected dropdown keys
         const aFilteredRecords = aMasterRecords.filter(rec => {
           const oDate = new Date(rec.timestamp);
           const aMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-          const sRowYear = rec.year || oDate.getFullYear().toString();
-          const sRowMonth = rec.month || aMonths[oDate.getMonth()];
+          const sRowYear = rec.year || (isNaN(oDate.getTime()) ? "Legacy" : oDate.getFullYear().toString());
+          const sRowMonth = rec.month || (isNaN(oDate.getTime()) ? "Legacy" : aMonths[oDate.getMonth()]);
           return (sTargetYear === "ALL" || sRowYear === sTargetYear) && (sTargetMonth === "ALL" || sRowMonth === sTargetMonth);
         });
-
-        // Loop through and append formatted IST strings to each record item
         const aFormattedTableItems = aFilteredRecords.map(rec => {
-          let sFormattedIST = "";
+          let sFormattedIST = "N/A (Legacy)";
           if (rec.timestamp) {
             const oDate = new Date(rec.timestamp);
-            const sDay = String(oDate.getDate()).padStart(2, '0');
-            const sMonth = String(oDate.getMonth() + 1).padStart(2, '0');
-            const sYear = oDate.getFullYear();
-            const sHours = String(oDate.getHours()).padStart(2, '0');
-            const sMins = String(oDate.getMinutes()).padStart(2, '0');
-            const sSecs = String(oDate.getSeconds()).padStart(2, '0');
-            sFormattedIST = `${sDay}-${sMonth}-${sYear} ${sHours}:${sMins}:${sSecs}`;
+            if (!isNaN(oDate.getTime())) {
+              sFormattedIST = `${String(oDate.getDate()).padStart(2, '0')}-${String(oDate.getMonth() + 1).padStart(2, '0')}-${oDate.getFullYear()} ${String(oDate.getHours()).padStart(2, '0')}:${String(oDate.getMinutes()).padStart(2, '0')}:${String(oDate.getSeconds()).padStart(2, '0')}`;
+            }
           }
           return Object.assign({}, rec, {
-            displayTimestamp: sFormattedIST
+            displayTimestamp: sFormattedIST,
+            lead: rec.lead || "Legacy/Direct",
+            isEditable: false
           });
         });
         const oSelectionModel = new sap.ui.model.json.JSONModel({
@@ -1881,73 +1826,180 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         const oDeleteTable = new sap.m.Table({
           mode: sap.m.ListMode.MultiSelect,
           noDataText: "No operational tracking records found for this segment selection",
-          columns: [new sap.m.Column({
-            header: new sap.m.Label({
+          columns: [new Column({
+            header: new Label({
               text: "Document ID",
               design: "Bold"
             }),
-            width: "25%"
-          }), new sap.m.Column({
-            header: new sap.m.Label({
+            width: "20%"
+          }), new Column({
+            header: new Label({
               text: "Type",
               design: "Bold"
             }),
             width: "20%"
-          }), new sap.m.Column({
-            header: new sap.m.Label({
-              text: "Date & Time (IST)",
+          }), new Column({
+            header: new Label({
+              text: "Lead Source",
               design: "Bold"
             }),
-            width: "35%"
-          }), new sap.m.Column({
-            header: new sap.m.Label({
-              text: "Amount",
+            width: "20%"
+          }), new Column({
+            header: new Label({
+              text: "Amount (Rs.)",
               design: "Bold"
             }),
             width: "20%",
             hAlign: "Right"
+          }), new Column({
+            header: new Label({
+              text: "Date & Time",
+              design: "Bold"
+            }),
+            width: "20%"
           })]
         });
         oDeleteTable.bindItems({
           path: "/items",
-          template: new sap.m.ColumnListItem({
-            cells: [new sap.m.Text({
+          template: new ColumnListItem({
+            cells: [new Text({
               text: "{id}"
-            }), new sap.m.Text({
-              text: "{type}"
-            }), new sap.m.Text({
+            }), new VBox({
+              items: [new Text({
+                text: "{type}",
+                visible: "{= !${isEditable} }"
+              }), new Select({
+                selectedKey: "{type}",
+                visible: "{isEditable}",
+                width: "100%",
+                items: [new Item({
+                  key: "Quotation",
+                  text: "Quotation"
+                }), new Item({
+                  key: "TAX-INVOICE",
+                  text: "TAX-INVOICE"
+                }), new Item({
+                  key: "Cash Bill",
+                  text: "Cash Bill"
+                })]
+              })]
+            }), new VBox({
+              items: [new Text({
+                text: "{lead}",
+                visible: "{= !${isEditable} }"
+              }), new Select({
+                selectedKey: "{lead}",
+                visible: "{isEditable}",
+                width: "100%",
+                items: [new Item({
+                  key: "Justdial",
+                  text: "Justdial"
+                }), new Item({
+                  key: "Sulekha",
+                  text: "Sulekha"
+                }), new Item({
+                  key: "Direct",
+                  text: "Direct"
+                }), new Item({
+                  key: "Legacy/Direct",
+                  text: "Legacy/Direct"
+                })]
+              })]
+            }), new VBox({
+              items: [new Text({
+                text: {
+                  path: "amount",
+                  formatter: val => formatINR(val)
+                },
+                visible: "{= !${isEditable} }"
+              }), new Input({
+                value: "{amount}",
+                type: sap.m.InputType.Number,
+                visible: "{isEditable}"
+              })]
+            }), new Text({
               text: "{displayTimestamp}"
-            }), new sap.m.Text({
-              text: {
-                path: "amount",
-                formatter: val => formatINR(val)
-              }
             })]
           })
         });
         oDeleteTable.setModel(oSelectionModel);
         const oWipeDialog = new Dialog({
-          title: `Manage Segment: ${sTargetMonth}-${sTargetYear}`,
-          contentWidth: "520px",
-          contentHeight: "450px",
-          content: [new sap.m.VBox({
-            items: [new sap.m.Text({
-              text: "Check individual row boxes below, then click permanently clear to execute data exclusion operations:"
+          title: `Manage Segment Workspace: ${sTargetMonth}-${sTargetYear}`,
+          contentWidth: "750px",
+          contentHeight: "480px",
+          content: [new VBox({
+            items: [new Text({
+              text: "Select checkbox elements below to perform manual adjustments or execute clearances:"
             }).addStyleClass("sapUiSmallMarginBottom"), oDeleteTable]
           }).addStyleClass("sapUiContentPadding")],
-          buttons: [new sap.m.Button({
+          buttons: [new Button({
+            text: "Add New Entry",
+            icon: "sap-icon://add",
+            type: "Accept",
+            press: () => {
+              this._openNewLogFormInline(aMasterRecords, oSelectionModel, oWipeDialog);
+            }
+          }), new Button({
+            text: "Modify Fields",
+            icon: "sap-icon://edit",
+            type: "Default",
+            press: () => {
+              const aSelected = oDeleteTable.getSelectedItems();
+              if (aSelected.length === 0) {
+                sap.m.MessageToast.show("Please check target rows first.");
+                return;
+              }
+              aSelected.forEach(oItem => oItem.getBindingContext().setProperty("isEditable", true));
+              oSelectionModel.refresh(true);
+            }
+          }), new Button({
+            text: "Save Dynamic Changes",
+            icon: "sap-icon://save",
+            type: "Emphasized",
+            press: async () => {
+              sap.ui.core.BusyIndicator.show(0);
+              oSelectionModel.getProperty("/items").forEach(modifiedItem => {
+                const oMatch = aMasterRecords.find(mRec => mRec.id === modifiedItem.id);
+                if (oMatch) {
+                  oMatch.type = modifiedItem.type;
+                  oMatch.lead = modifiedItem.lead;
+                  oMatch.amount = parseFloat(modifiedItem.amount) || 0;
+                }
+              });
+              try {
+                const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
+                  method: "PUT",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "X-Master-Key": this.sMasterKey
+                  },
+                  body: JSON.stringify({
+                    records: aMasterRecords
+                  })
+                });
+                if (!response.ok) throw new Error("Cloud update operation rejected.");
+                sap.m.MessageToast.show("Changes saved successfully to cloud!");
+                oWipeDialog.close();
+                if (this.oMainAnalyticsDialog) this.oMainAnalyticsDialog.close();
+              } catch (ex) {
+                sap.m.MessageBox.error(ex.message);
+              } finally {
+                sap.ui.core.BusyIndicator.hide();
+              }
+            }
+          }), new Button({
             text: "Permanently Clear Selected",
             icon: "sap-icon://delete",
             type: "Reject",
             press: () => {
               const aSelectedUIItems = oDeleteTable.getSelectedItems();
               if (aSelectedUIItems.length === 0) {
-                sap.m.MessageToast.show("Please check at least one line row item.");
+                sap.m.MessageToast.show("Please check at least one line item row box.");
                 return;
               }
               this._executeCloudArrayWipe(aSelectedUIItems, aMasterRecords, oWipeDialog);
             }
-          }), new sap.m.Button({
+          }), new Button({
             text: "Cancel / Exit",
             press: () => oWipeDialog.close()
           })],
@@ -1955,29 +2007,117 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
         });
         oWipeDialog.open();
       } catch (err) {
-        sap.m.MessageBox.error(`Failed to initialize clearance management table context: ${err.message}`);
+        sap.m.MessageBox.error(`Workspace Fault: ${err.message}`);
       } finally {
         sap.ui.core.BusyIndicator.hide();
       }
     },
-    /**
-     * Phase 3 (Multi-Step): Slices targets, cleans array maps, and sends final configuration dataset back to jsonbin.
-     * @param {any[]} aSelectedUIItems Checked row layout objects from the sap.m.Table
-     * @param {any[]} aMasterRecords Full database history array downloaded from the cloud bin
-     * @param {sap.m.Dialog} oWipeDialog Reference to close the selection manager dialog window upon successful database sync
-     */
+    _openNewLogFormInline: function _openNewLogFormInline(aMasterRecords, oWorkspaceModel, oWipeDialog) {
+      const oIdIn = new Input({
+        placeholder: "e.g., INV-2026-089"
+      });
+      const oAmtIn = new Input({
+        type: sap.m.InputType.Number,
+        placeholder: "Amount in Rs."
+      });
+      const oTypeSel = new Select({
+        items: [new Item({
+          key: "Quotation",
+          text: "Quotation"
+        }), new Item({
+          key: "TAX-INVOICE",
+          text: "TAX-INVOICE"
+        }), new Item({
+          key: "Cash Bill",
+          text: "Cash Bill"
+        })]
+      });
+      const oLeadSel = new Select({
+        items: [new Item({
+          key: "Justdial",
+          text: "Justdial"
+        }), new Item({
+          key: "Sulekha",
+          text: "Sulekha"
+        }), new Item({
+          key: "Direct",
+          text: "Direct"
+        }), new Item({
+          key: "Legacy/Direct",
+          text: "Legacy/Direct"
+        })]
+      });
+      const oAddLogDialog = new Dialog({
+        title: "Append Manual Analytics Entry",
+        contentWidth: "350px",
+        content: [new VBox({
+          items: [new Label({
+            text: "Document ID*"
+          }), oIdIn, new Label({
+            text: "Doc Type"
+          }), oTypeSel, new Label({
+            text: "Lead Source"
+          }), oLeadSel, new Label({
+            text: "Amount*"
+          }), oAmtIn]
+        }).addStyleClass("sapUiContentPadding")],
+        buttons: [new Button({
+          text: "Insert Entry",
+          type: "Accept",
+          icon: "sap-icon://add",
+          press: async () => {
+            if (!oIdIn.getValue() || !oAmtIn.getValue()) {
+              sap.m.MessageToast.show("Fill mandatory fields.");
+              return;
+            }
+            oAddLogDialog.close();
+            sap.ui.core.BusyIndicator.show(0);
+            const oNow = new Date();
+            const aMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const oNewItem = {
+              id: oIdIn.getValue(),
+              type: oTypeSel.getSelectedKey(),
+              lead: oLeadSel.getSelectedKey(),
+              amount: parseFloat(oAmtIn.getValue()) || 0,
+              client: "Manual Entry Profile",
+              timestamp: oNow.toISOString(),
+              month: aMonths[oNow.getMonth()],
+              year: oNow.getFullYear().toString()
+            };
+            aMasterRecords.push(oNewItem);
+            try {
+              await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
+                method: "PUT",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Master-Key": this.sMasterKey
+                },
+                body: JSON.stringify({
+                  records: aMasterRecords
+                })
+              });
+              sap.m.MessageToast.show("Manual ledger log saved.");
+              oWipeDialog.close();
+              if (this.oMainAnalyticsDialog) this.oMainAnalyticsDialog.close();
+            } catch (e) {
+              sap.m.MessageBox.error(e.message);
+            } finally {
+              sap.ui.core.BusyIndicator.hide();
+            }
+          }
+        }), new Button({
+          text: "Cancel",
+          press: () => oAddLogDialog.close()
+        })],
+        afterClose: () => oAddLogDialog.destroy()
+      });
+      oAddLogDialog.open();
+    },
     _executeCloudArrayWipe: async function _executeCloudArrayWipe(aSelectedUIItems, aMasterRecords, oWipeDialog) {
       sap.ui.core.BusyIndicator.show(0);
       try {
-        // 1. Map selected rows to match text ID properties from binding contexts
-        const aTargetIdsToDelete = aSelectedUIItems.map(oItem => {
-          return oItem.getBindingContext().getProperty("id");
-        });
-
-        // 2. Clean array list to omit target matches
+        const aTargetIdsToDelete = aSelectedUIItems.map(oItem => oItem.getBindingContext().getProperty("id"));
         const aCleanedRecords = aMasterRecords.filter(rec => !aTargetIdsToDelete.includes(rec.id));
-
-        // 3. Commit the cleaned array straight back up to your cloud repository container
         const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
           method: "PUT",
           headers: {
@@ -1988,114 +2128,351 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             records: aCleanedRecords
           })
         });
-        if (!response.ok) throw new Error("Cloud sync write session parameters rejected entry clearance updates.");
-        sap.m.MessageToast.show(`Successfully erased ${aTargetIdsToDelete.length} logged record entries from cloud repository.`);
-        oWipeDialog.close(); // Close deletion window shell context layout cleanly
+        if (!response.ok) throw new Error("Cloud sync write parameters rejected updates.");
+        sap.m.MessageToast.show(`Successfully erased ${aTargetIdsToDelete.length} record lines.`);
+        oWipeDialog.close();
+        if (this.oMainAnalyticsDialog) this.oMainAnalyticsDialog.close();
       } catch (err) {
-        sap.m.MessageBox.error(`Wipe Transaction Error: ${err.message || err}`);
+        sap.m.MessageBox.error(`Wipe Fault: ${err.message || err}`);
+      } finally {
+        sap.ui.core.BusyIndicator.hide();
+      }
+    },
+    _downloadAnalyticsExcel: function _downloadAnalyticsExcel(aRecords) {
+      if (!aRecords || aRecords.length === 0) {
+        sap.m.MessageToast.show("No records available to export.");
+        return;
+      }
+      const aExcelRows = aRecords.map(rec => {
+        let sFormattedIST = "";
+        if (rec.timestamp) {
+          const oDate = new Date(rec.timestamp);
+          sFormattedIST = `${String(oDate.getDate()).padStart(2, '0')}-${String(oDate.getMonth() + 1).padStart(2, '0')}-${oDate.getFullYear()} ${String(oDate.getHours()).padStart(2, '0')}:${String(oDate.getMinutes()).padStart(2, '0')}:${String(oDate.getSeconds()).padStart(2, '0')}`;
+        }
+        return {
+          "Document ID": rec.id,
+          "Document Type": rec.type,
+          "Lead Source": rec.lead || "Direct",
+          "Client Name": rec.client,
+          "Grand Total (Rs.)": rec.amount,
+          "Date & Time (IST)": sFormattedIST
+        };
+      });
+      const ws = XLSX.utils.json_to_sheet(aExcelRows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Revenue Overview");
+      XLSX.writeFile(wb, "Business_Analytics_Summary.xlsx");
+    },
+    // =========================================================================
+    // CUSTOMER PROFILE DIRECTORY (LOOKUP, CRUD & INJECTION FORM PANELS)
+    // =========================================================================
+    /**
+     * Fetches custom records registry from jsonbin.io and initializes the 
+     * single-select lookup table layout data grid workspace with fuzzy filtering.
+     */
+    /**
+      * CUSTOMER DIRECTORY LOOKUP ENGINE
+      * Dynamically instantiates the lookup catalog and handles runtime scoping states cleanly.
+      */
+    onOpenCustomerDirectory: async function _onOpenCustomerDirectory() {
+      sap.ui.core.BusyIndicator.show(0);
+      try {
+        const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sCustomerBinId}/latest`, {
+          method: "GET",
+          headers: {
+            "X-Master-Key": this.sMasterKey
+          }
+        });
+        if (!response.ok) throw new Error("Could not retrieve customer registry database.");
+        const result = await response.json();
+        const aCustomers = result.record.customers || [];
+        const oCustModel = new sap.ui.model.json.JSONModel({
+          customers: aCustomers
+        });
+        const oSearchField = new sap.m.SearchField({
+          placeholder: "Filter customer listings cleanly...",
+          width: "100%",
+          liveChange: oEvent => {
+            const sQuery = oEvent.getParameter("newValue").toLowerCase();
+            const oBinding = oCustTable.getBinding("items");
+            const aFilters = [new sap.ui.model.Filter("name", sap.ui.model.FilterOperator.Contains, sQuery), new sap.ui.model.Filter("phone", sap.ui.model.FilterOperator.Contains, sQuery)];
+            oBinding.filter(sQuery ? new sap.ui.model.Filter({
+              filters: aFilters,
+              and: false
+            }) : []);
+          }
+        });
+        const oCustTable = new sap.m.Table({
+          mode: sap.m.ListMode.SingleSelectLeft,
+          columns: [new sap.m.Column({
+            header: new sap.m.Label({
+              text: "Profile Client Name",
+              design: "Bold"
+            }),
+            width: "40%"
+          }), new sap.m.Column({
+            header: new sap.m.Label({
+              text: "Contact Details",
+              design: "Bold"
+            }),
+            width: "30%"
+          }), new sap.m.Column({
+            header: new sap.m.Label({
+              text: "GSTIN Identification",
+              design: "Bold"
+            }),
+            width: "30%"
+          })]
+        });
+        oCustTable.bindItems({
+          path: "/customers",
+          template: new sap.m.ColumnListItem({
+            cells: [new sap.m.Text({
+              text: "{name}"
+            }), new sap.m.Text({
+              text: "{phone}"
+            }), new sap.m.Text({
+              text: "{gstin}"
+            })]
+          })
+        });
+        oCustTable.setModel(oCustModel);
+
+        // FIX: We declare the layout instance shell first, allowing button bindings to resolve it safely later
+        const oDirectoryDialog = new sap.m.Dialog({
+          title: "Customer Registry Search-Help Workspace",
+          contentWidth: "620px",
+          contentHeight: "500px",
+          content: [oCustTable],
+          afterClose: () => oDirectoryDialog.destroy()
+        });
+
+        // FIX: Build the header sub-elements dynamically AFTER the dialog pointer exists in memory
+        const oCustomHeaderBar = new sap.m.Bar({
+          contentLeft: [new sap.m.Title({
+            text: "Customer Registry"
+          })],
+          contentRight: [new sap.m.Button({
+            icon: "sap-icon://decline",
+            type: "Transparent",
+            press: () => {
+              // Resolves safely now because the dialog instance is fully initialized in memory
+              oDirectoryDialog.close();
+            }
+          })]
+        });
+
+        // Inject the customized components back into the dialog layout setup properties
+        oDirectoryDialog.setCustomHeader(oCustomHeaderBar);
+        oDirectoryDialog.setSubHeader(new sap.m.Bar({
+          contentLeft: [oSearchField]
+        }));
+        oDirectoryDialog.addButton(new sap.m.Button({
+          text: "Edit",
+          icon: "sap-icon://edit",
+          type: "Attention",
+          press: () => {
+            const oSelectedRow = oCustTable.getSelectedItem();
+            if (!oSelectedRow) {
+              sap.m.MessageToast.show("Please select a target profile record line item.");
+              return;
+            }
+            this._openCustomerFormWorkspace(aCustomers, oDirectoryDialog, oSelectedRow.getBindingContext().getObject());
+          }
+        }));
+        oDirectoryDialog.addButton(new sap.m.Button({
+          text: "Delete",
+          icon: "sap-icon://delete",
+          type: "Reject",
+          press: () => {
+            const oSelectedRow = oCustTable.getSelectedItem();
+            if (!oSelectedRow) {
+              sap.m.MessageToast.show("Please check a target row first.");
+              return;
+            }
+            this._deleteCustomerRecordDirect(aCustomers, oSelectedRow.getBindingContext().getObject(), oDirectoryDialog);
+          }
+        }));
+        oDirectoryDialog.addButton(new sap.m.Button({
+          text: "Register New",
+          icon: "sap-icon://add",
+          type: "Accept",
+          press: () => {
+            this._openCustomerFormWorkspace(aCustomers, oDirectoryDialog, null);
+          }
+        }));
+        // Attach operational footprint buttons back onto the dialog base footer layout
+        oDirectoryDialog.addButton(new sap.m.Button({
+          text: "Inject",
+          type: "Emphasized",
+          icon: "sap-icon://accept",
+          press: () => {
+            const oSelectedRow = oCustTable.getSelectedItem();
+            if (!oSelectedRow) {
+              sap.m.MessageToast.show("Please check a row line item first.");
+              return;
+            }
+            this._autoFillCustomerInputs(oSelectedRow.getBindingContext().getObject());
+            oDirectoryDialog.close();
+          }
+        }));
+        oDirectoryDialog.open();
+      } catch (err) {
+        sap.m.MessageBox.error(`Directory Init Fault: ${err.message}`);
       } finally {
         sap.ui.core.BusyIndicator.hide();
       }
     },
     /**
-    * Converts the current cloud analytics logs into an Excel file and downloads it.
-    * @param {any[]} aRecords The raw array of billing logs fetched from the bin
-    */
-    // private _downloadAnalyticsExcel(aRecords: any[]): void {
-    //     if (!aRecords || aRecords.length === 0) {
-    //         sap.m.MessageToast.show("No transaction records available to export.");
-    //         return;
-    //     }
-    //     // 1. Map the clean cloud fields to descriptive Excel columns
-    //     const aExcelRows = aRecords.map((rec: any) => ({
-    //         "Document ID": rec.id,
-    //         "Document Type": rec.type,
-    //         "Client / Customer Name": rec.client,
-    //         "Grand Total (Rs.)": rec.amount,
-    //         "Generated Timestamp": rec.timestamp
-    //     }));
-    //     // 2. Build and export the spreadsheet using your existing XLSX library reference
-    //     const ws = XLSX.utils.json_to_sheet(aExcelRows);
-    //     const wb = XLSX.utils.book_new();
-    //     XLSX.utils.book_append_sheet(wb, ws, "Revenue Overview");
-    //     XLSX.writeFile(wb, "Business_Analytics_Summary.xlsx");
-    //     sap.m.MessageToast.show("Analytics data exported to Excel successfully!");
-    // }
-    // /**
-    //  * Wipes out all historical transactions inside the dedicated analytics cloud bin.
+     * Automatically maps database profile values into matching input form layout containers 
+     * depending on the active visible view tab selection ("Quotation" | "TAX-INVOICE" | "Cash Bill").
+     */
+    _autoFillCustomerInputs: function _autoFillCustomerInputs(oCust) {
+      const oView = this.getView();
+      const sSelectMode = oView?.byId("mySelect")?.getSelectedItem()?.getText() || "Quotation";
+      const oModel = oView?.getModel();
+      if (sSelectMode === "Quotation") {
+        oModel.setProperty("/header/To", oCust.name + "\n" + oCust.address);
+      } else if (sSelectMode === "TAX-INVOICE") {
+        oModel.setProperty("/taxHeader/To", oCust.name + "\n" + oCust.address);
+        oModel.setProperty("/taxHeader/PartyGST", oCust.gstin);
+      } else if (sSelectMode === "Cash Bill") {
+        oModel.setProperty("/cashHeader/cashTo", oCust.name + "\n" + oCust.address);
+      }
+      sap.m.MessageToast.show(`Injected values matching profile: ${oCust.name}`);
+      oModel.refresh(true);
+    },
     /**
-    * Prompts a password validation dialog box before wiping historical records from the cloud bin.
-    * @param {sap.m.Dialog} oDashboardDialog Reference to the parent dashboard dialog overlay
-    */
-    _clearAnalyticsCloudData: function _clearAnalyticsCloudData(oDashboardDialog) {
-      // 1. Hardcode your chosen administrative access password here
-      const sMasterPassword = "clearMe@22";
-
-      // 2. Instantiate a secure Password Input field component
-      const oPasswordInput = new sap.m.Input({
-        type: sap.m.InputType.Password,
-        placeholder: "Enter admin password",
-        width: "100%"
+     * Sub-dialog form wrapper to handle both Registration (Add New) and Modification (Edit) tasks.
+     */
+    _openCustomerFormWorkspace: function _openCustomerFormWorkspace(aMasterList, oParentLookupDialog, oExistingCustToEdit) {
+      const bIsEditMode = !!oExistingCustToEdit;
+      const oName = new sap.m.Input({
+        placeholder: "Company or Individual Profile Name",
+        value: bIsEditMode ? oExistingCustToEdit.name : ""
       });
-
-      // 3. Build the primary security authentication container window
-      const oSecurityDialog = new Dialog({
-        title: "Security Verification Required",
-        type: "Message",
-        state: "Warning",
-        // Provides a distinct orange accent bar
-        content: [new sap.m.Text({
-          text: "This action will permanently wipe out all recorded historical transaction data. Please enter the master password to authorize this action:"
-        }), oPasswordInput],
-        beginButton: new sap.m.Button({
-          text: "Authorize & Clear",
-          type: "Reject",
-          // Highlights the button red for destructive operations
+      const oPhone = new sap.m.Input({
+        placeholder: "Contact Phone number",
+        value: bIsEditMode ? oExistingCustToEdit.phone : ""
+      });
+      const oGst = new sap.m.Input({
+        placeholder: "GST No",
+        value: bIsEditMode ? oExistingCustToEdit.gstin : ""
+      });
+      const oAddr = new sap.m.TextArea({
+        placeholder: "Billing address maps",
+        rows: 3,
+        width: "100%",
+        value: bIsEditMode ? oExistingCustToEdit.address : ""
+      });
+      const oFormDialog = new Dialog({
+        title: bIsEditMode ? "Modify Client Profile" : "Register Profile Record Workspace",
+        contentWidth: "380px",
+        content: [new sap.m.VBox({
+          items: [new sap.m.Label({
+            text: "Profile Customer Name*",
+            design: "Bold"
+          }), oName, new sap.m.Label({
+            text: "Contact Number Link*",
+            design: "Bold"
+          }), oPhone, new sap.m.Label({
+            text: "Customer GST No"
+          }), oGst, new sap.m.Label({
+            text: "Street Level Address Details"
+          }), oAddr]
+        }).addStyleClass("sapUiContentPadding")],
+        buttons: [new sap.m.Button({
+          text: bIsEditMode ? "Commit Edits" : "Save Profile",
+          type: "Accept",
+          icon: "sap-icon://save",
           press: async () => {
-            const sEnteredPassword = oPasswordInput.getValue();
-
-            // 4. Validate input value against the hardcoded key string
-            if (sEnteredPassword !== sMasterPassword) {
-              sap.m.MessageBox.error("Authentication Failed! Incorrect password entry.");
-              oPasswordInput.setValue(""); // Reset input field clear
+            if (!oName.getValue() || !oPhone.getValue()) {
+              sap.m.MessageBox.error("Mandatory fields are missing variables.");
               return;
             }
-
-            // 5. If correct, proceed to trigger your existing database reset logic
-            oSecurityDialog.close();
+            oFormDialog.close();
             sap.ui.core.BusyIndicator.show(0);
+            if (bIsEditMode) {
+              oExistingCustToEdit.name = oName.getValue();
+              oExistingCustToEdit.phone = oPhone.getValue();
+              oExistingCustToEdit.gstin = oGst.getValue();
+              oExistingCustToEdit.address = oAddr.getValue();
+            } else {
+              aMasterList.push({
+                name: oName.getValue(),
+                phone: oPhone.getValue(),
+                gstin: oGst.getValue(),
+                address: oAddr.getValue()
+              });
+            }
             try {
-              const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
+              await fetch(`https://api.jsonbin.io/v3/b/${this.sCustomerBinId}`, {
                 method: "PUT",
                 headers: {
                   "Content-Type": "application/json",
                   "X-Master-Key": this.sMasterKey
                 },
                 body: JSON.stringify({
-                  records: []
+                  customers: aMasterList
                 })
               });
-              if (!response.ok) throw new Error("Cloud database rejected the wipe request.");
-              sap.m.MessageToast.show("Analytics history successfully cleared from the cloud!");
-              oDashboardDialog.close(); // Closes the underlying dashboard chart layout cleanly
-            } catch (err) {
-              sap.m.MessageBox.error(`Clear Operational Fault: ${err.message}`);
+              sap.m.MessageToast.show("Cloud profile synchronization sequence completed.");
+              oParentLookupDialog.close();
+            } catch (e) {
+              sap.m.MessageBox.error(e.message);
             } finally {
               sap.ui.core.BusyIndicator.hide();
             }
           }
-        }),
-        endButton: new sap.m.Button({
-          text: "Abort",
+        }), new sap.m.Button({
+          text: "Clear Fields",
+          icon: "sap-icon://refresh",
           press: () => {
-            oSecurityDialog.close();
+            oName.setValue("");
+            oPhone.setValue("");
+            oGst.setValue("");
+            oAddr.setValue("");
           }
-        }),
-        afterClose: () => {
-          oSecurityDialog.destroy();
+        }), new sap.m.Button({
+          text: "Cancel Form",
+          press: () => oFormDialog.close()
+        })],
+        afterClose: () => oFormDialog.destroy()
+      });
+      oFormDialog.open();
+    },
+    /**
+     * Excludes a selected customer profile entity from the master dataset array list 
+     * and updates the repository cache backend synchronously.
+     */
+    _deleteCustomerRecordDirect: function _deleteCustomerRecordDirect(aMasterList, oCustTargetToDelete, oParentLookupDialog) {
+      sap.m.MessageBox.confirm(`Wipe profile matching ${oCustTargetToDelete.name} permanently from the cloud repository directory registry?`, {
+        title: "Confirm destructive operation",
+        actions: [sap.m.MessageBox.Action.YES, sap.m.MessageBox.Action.NO],
+        onClose: async sAction => {
+          if (sAction !== sap.m.MessageBox.Action.YES) return;
+          oParentLookupDialog.close();
+          sap.ui.core.BusyIndicator.show(0);
+          const aCleanedCustomers = aMasterList.filter(item => item.phone !== oCustTargetToDelete.phone || item.name !== oCustTargetToDelete.name);
+          try {
+            await fetch(`https://api.jsonbin.io/v3/b/${this.sCustomerBinId}`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Master-Key": this.sMasterKey
+              },
+              body: JSON.stringify({
+                customers: aCleanedCustomers
+              })
+            });
+            sap.m.MessageToast.show("Erased profile record line.");
+          } catch (e) {
+            sap.m.MessageBox.error(e.message);
+          } finally {
+            sap.ui.core.BusyIndicator.hide();
+          }
         }
       });
-      oSecurityDialog.open();
     }
   });
   return View;

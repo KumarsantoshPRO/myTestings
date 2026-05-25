@@ -14,7 +14,16 @@
         showFooter="true"
     >
         <uxap:headerTitle>
-            <uxap:ObjectPageHeader objectTitle="IN-TELECOM SERVICES" objectSubtitle="GSTIN: 29AGKPP7288F1Z0" >
+            <uxap:ObjectPageHeader
+                objectTitle="IN-TELECOM SERVICES"
+                objectSubtitle="GSTIN: 29AGKPP7288F1Z0"
+            >
+                <Button
+                    icon="sap-icon://add"
+                    press="onOpenCustomerDirectory"
+                    type="Transparent"
+                    tooltip="Add new customer"
+                />
                 <Button
                     icon="sap-icon://bar-chart"
                     press="onShowAnalyticsGraph"
@@ -87,6 +96,30 @@
                                     growing="true"
                                     placeholder="e.g., Sub line below subject"
                                 />
+                                <Label
+                                    text="Lead Source"
+                                    design="Bold"
+                                />
+                                <Select
+                                    id="idQuoteLeadSelect"
+                                    selectedKey="{/header/LeadSource}"
+                                    width="100%"
+                                >
+                                    <items>
+                                        <core:Item
+                                            key="Direct"
+                                            text="Direct"
+                                        />
+                                        <core:Item
+                                            key="Justdial"
+                                            text="Justdial"
+                                        />
+                                        <core:Item
+                                            key="Sulekha"
+                                            text="Sulekha"
+                                        />
+                                    </items>
+                                </Select>
                             </f:content>
                         </f:SimpleForm>
                     </uxap:ObjectPageSubSection>
@@ -201,11 +234,13 @@
                                     displayFormat="long"
                                     placeholder="dd-MM-yyyy"
                                 />
+
                                 <Label text="PO No" />
                                 <Input
                                     value="{/taxHeader/PONo}"
                                     placeholder="Enter PO No"
                                 />
+
                                 <Label text="PO Date" />
                                 <Input
                                     value="{/taxHeader/PODate}"
@@ -221,6 +256,30 @@
                                     value="{/taxHeader/PartyGST}"
                                     placeholder="Enter Party GST"
                                 />
+                                <Label
+                                    text="Lead Source"
+                                    design="Bold"
+                                />
+                                <Select
+                                    id="idInvoiceLeadSelect"
+                                    selectedKey="{/taxHeader/LeadSource}"
+                                    width="100%"
+                                >
+                                    <items>
+                                        <core:Item
+                                            key="Direct"
+                                            text="Direct"
+                                        />
+                                        <core:Item
+                                            key="Justdial"
+                                            text="Justdial"
+                                        />
+                                        <core:Item
+                                            key="Sulekha"
+                                            text="Sulekha"
+                                        />
+                                    </items>
+                                </Select>
                             </f:content>
                         </f:SimpleForm>
                     </uxap:ObjectPageSubSection>
@@ -489,7 +548,30 @@
                                     displayFormat="long"
                                     placeholder="dd-MM-yyyy"
                                 />
-
+                                <Label
+                                    text="Lead Source"
+                                    design="Bold"
+                                />
+                                <Select
+                                    id="idCashLeadSelect"
+                                    selectedKey="{/cashHeader/LeadSource}"
+                                    width="100%"
+                                >
+                                    <items>
+                                        <core:Item
+                                            key="Direct"
+                                            text="Direct"
+                                        />
+                                        <core:Item
+                                            key="Justdial"
+                                            text="Justdial"
+                                        />
+                                        <core:Item
+                                            key="Sulekha"
+                                            text="Sulekha"
+                                        />
+                                    </items>
+                                </Select>
                                 <Label text="Bank Details" />
                                 <TextArea
                                     value="{/cashHeader/cashbankDetails}"
