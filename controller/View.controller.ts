@@ -1337,7 +1337,7 @@ export default class View extends Controller {
                 content: [new sap.m.VBox({ items: [oFilterToolbar, oHtmlMetricsDashboard] }).addStyleClass("sapUiContentPadding")],
                 buttons: [
                     new sap.m.Button({ text: "Download Summary", icon: "sap-icon://excel-attachment", type: "Accept", press: () => { this._downloadAnalyticsExcel(aRecords); } }),
-                    new sap.m.Button({ text: "Clear History", icon: "sap-icon://delete", type: "Reject", press: () => { this._verifyAdminPasswordBeforeManage(oYearSelect.getSelectedKey(), oMonthSelect.getSelectedKey()); } })
+                    new sap.m.Button({ text: "Edit History", type: "Reject", press: () => { this._verifyAdminPasswordBeforeManage(oYearSelect.getSelectedKey(), oMonthSelect.getSelectedKey()); } })
                 ],
                 afterClose: () => { this.oMainAnalyticsDialog?.destroy(); this.oMainAnalyticsDialog = null; }
             });
@@ -1435,11 +1435,11 @@ export default class View extends Controller {
                 content: [new VBox({ items: [new Text({ text: "Select checkbox elements below to perform manual adjustments or execute clearances:" }).addStyleClass("sapUiSmallMarginBottom"), oDeleteTable] }).addStyleClass("sapUiContentPadding")],
                 buttons: [
                     new Button({
-                        text: "Add New Entry", icon: "sap-icon://add", type: "Accept",
+                        text: "Add New", icon: "sap-icon://add", type: "Accept",
                         press: () => { this._openNewLogFormInline(aMasterRecords, oSelectionModel, oWipeDialog); }
                     }),
                     new Button({
-                        text: "Modify Fields", icon: "sap-icon://edit", type: "Default",
+                        text: "Modify", icon: "sap-icon://edit", type: "Default",
                         press: () => {
                             const aSelected = oDeleteTable.getSelectedItems();
                             if (aSelected.length === 0) { sap.m.MessageToast.show("Please check target rows first."); return; }
@@ -1448,7 +1448,7 @@ export default class View extends Controller {
                         }
                     }),
                     new Button({
-                        text: "Save Dynamic Changes", icon: "sap-icon://save", type: "Emphasized",
+                        text: "Save", icon: "sap-icon://save", type: "Emphasized",
                         press: async () => {
                             sap.ui.core.BusyIndicator.show(0);
                             oSelectionModel.getProperty("/items").forEach((modifiedItem: any) => {
@@ -1472,7 +1472,7 @@ export default class View extends Controller {
                             this._executeCloudArrayWipe(aSelectedUIItems, aMasterRecords, oWipeDialog);
                         }
                     }),
-                    new Button({ text: "Cancel / Exit", press: () => oWipeDialog.close() })
+                    new Button({ text: "Cancel", press: () => oWipeDialog.close() })
                 ],
                 afterClose: () => oWipeDialog.destroy()
             });

@@ -1735,8 +1735,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               this._downloadAnalyticsExcel(aRecords);
             }
           }), new sap.m.Button({
-            text: "Clear History",
-            icon: "sap-icon://delete",
+            text: "Edit History",
             type: "Reject",
             press: () => {
               this._verifyAdminPasswordBeforeManage(oYearSelect.getSelectedKey(), oMonthSelect.getSelectedKey());
@@ -1933,14 +1932,14 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
             }).addStyleClass("sapUiSmallMarginBottom"), oDeleteTable]
           }).addStyleClass("sapUiContentPadding")],
           buttons: [new Button({
-            text: "Add New Entry",
+            text: "Add New",
             icon: "sap-icon://add",
             type: "Accept",
             press: () => {
               this._openNewLogFormInline(aMasterRecords, oSelectionModel, oWipeDialog);
             }
           }), new Button({
-            text: "Modify Fields",
+            text: "Modify",
             icon: "sap-icon://edit",
             type: "Default",
             press: () => {
@@ -1953,7 +1952,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               oSelectionModel.refresh(true);
             }
           }), new Button({
-            text: "Save Dynamic Changes",
+            text: "Save",
             icon: "sap-icon://save",
             type: "Emphasized",
             press: async () => {
@@ -2000,7 +1999,7 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
               this._executeCloudArrayWipe(aSelectedUIItems, aMasterRecords, oWipeDialog);
             }
           }), new Button({
-            text: "Cancel / Exit",
+            text: "Cancel",
             press: () => oWipeDialog.close()
           })],
           afterClose: () => oWipeDialog.destroy()
