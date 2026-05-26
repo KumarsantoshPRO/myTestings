@@ -19,11 +19,11 @@
                 objectSubtitle="GSTIN: 29AGKPP7288F1Z0"
             >
                 <Button
-                    text="Sync"
-                    icon="sap-icon://synchronize"
+                    text="Upload"
+                    icon="sap-icon://upload-to-cloud"
                     type="Ghost"
-                    press="onSyncCloudDatabases"
-                    visible="false"
+                    press="onBulkExcelUploadPress"
+                    visible="true"
                 />
                 <Button
                     icon="sap-icon://customer-briefing"

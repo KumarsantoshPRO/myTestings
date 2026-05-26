@@ -2591,6 +2591,148 @@ sap.ui.define(["sap/ui/core/mvc/Controller", "sap/ui/model/json/JSONModel", "sap
           }
         }
       });
+    },
+    /**
+     * Event handler bound to your new "Bulk Upload Excel" button press.
+     * Instantiates a temporary File Uploader element programmatically to parse incoming records.
+     */
+    onBulkExcelUploadPress: function _onBulkExcelUploadPress(oEvent) {
+      const oInput = document.createElement("input");
+      oInput.type = "file";
+      oInput.accept = ".xlsx, .xls";
+      oInput.onchange = async e => {
+        const oFile = e.target.files[0];
+        if (!oFile) return;
+        sap.ui.core.BusyIndicator.show(0);
+        const oReader = new FileReader();
+        oReader.onload = async evt => {
+          try {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, {
+              type: 'array'
+            });
+            const sFirstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sFirstSheetName];
+
+            // Convert rows to key-value objects dynamically
+            const aRawRows = XLSX.utils.sheet_to_json(worksheet);
+            if (aRawRows.length === 0) throw new Error("The selected Excel worksheet is empty.");
+
+            // Peek at the first row's keys to determine processing engine path routing
+            const aFirstRowKeys = Object.keys(aRawRows[0]);
+            if (aFirstRowKeys.includes("Customer Name")) {
+              await this._processBulkCustomers(aRawRows);
+            } else if (aFirstRowKeys.includes("Document ID")) {
+              await this._processBulkAnalysis(aRawRows);
+            } else {
+              throw new Error("Invalid Template: Headers do not match Customer or Analysis formatting models.");
+            }
+          } catch (oErr) {
+            sap.m.MessageBox.error(`Bulk Import Aborted: ${oErr.message}`);
+          } finally {
+            sap.ui.core.BusyIndicator.hide();
+          }
+        };
+        oReader.readAsArrayBuffer(oFile);
+      };
+      oInput.click(); // Trigger native device OS file selector window frame
+    },
+    /**
+     * Process mapping engine for Bulk Customers imports.
+     */
+    _processBulkCustomers: async function _processBulkCustomers(aExcelData) {
+      // 1. Fetch current repository directory records using your request architecture wrapper
+      const record = await this._executeCloudRequest("GET", this.sCustomerBinId, this.sLocalCustomerKey, {
+        customers: []
+      });
+      const aExistingCustomers = record.customers || [];
+
+      // 2. Map and append row items matching database schema specifications
+      aExcelData.forEach(row => {
+        const sPhone = row["Phone No"] ? row["Phone No"].toString().trim() : "";
+        const sName = row["Customer Name"] ? row["Customer Name"].toString().trim() : "";
+
+        // Basic conflict checks to prevent absolute row duplication mismatches
+        const bDuplicateExists = aExistingCustomers.some(c => c.phone === sPhone && c.name === sName);
+        if (!bDuplicateExists && sName) {
+          aExistingCustomers.push({
+            name: sName,
+            phone: sPhone,
+            gstin: row["GSTIN"] ? row["GSTIN"].toString().trim() : "",
+            address: row["Billing Address"] ? row["Billing Address"].toString().trim() : ""
+          });
+        }
+      });
+
+      // 3. Fire save update execution streams straight out to your central bin references
+      await this._executeCloudRequest("PUT", this.sCustomerBinId, this.sLocalCustomerKey, null, {
+        customers: aExistingCustomers
+      });
+      sap.m.MessageToast.show(`Bulk Upload Successful: Customer Directory expanded and synchronized.`);
+    },
+    /**
+     * Process mapping engine updated to match download summary sheet column templates.
+     * Natively handles "Date & Time (IST)" custom strings to build month and year filters.
+     */
+    _processBulkAnalysis: async function _processBulkAnalysis(aExcelData) {
+      // 1. Pull down current historical analytics tracking lines
+      const record = await this._executeCloudRequest("GET", this.sAnalyticsBinId, this.sLocalAnalyticsKey, {
+        records: []
+      });
+      const aExistingLogs = record.records || [];
+      const aMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+      // 2. Loop and map summary columns onto standard JSON database schemas
+      aExcelData.forEach(row => {
+        const sDocId = row["Document ID"] ? row["Document ID"].toString().trim() : "";
+
+        // Check for duplicate keys to keep the database ledger synchronized cleanly
+        const bDuplicateExists = aExistingLogs.some(log => log.id === sDocId);
+        if (!bDuplicateExists && sDocId) {
+          let oParsedDate = new Date();
+
+          // Read the custom "Date & Time (IST)" summary spreadsheet header column
+          const sRawDateStr = row["Date & Time (IST)"];
+          if (sRawDateStr) {
+            // Handles standard Indian date presentation mappings: DD-MM-YYYY HH:mm:ss
+            const aDateTimeParts = sRawDateStr.toString().split(" ");
+            const aDateComponents = aDateTimeParts[0].split("-");
+            if (aDateComponents.length === 3) {
+              const sFormattedIsoFallback = `${aDateComponents[2]}-${aDateComponents[1]}-${aDateComponents[0]}` + (aDateTimeParts[1] ? `T${aDateTimeParts[1]}.000Z` : "T00:00:00.000Z");
+              const oCheckDate = new Date(sFormattedIsoFallback);
+              if (!isNaN(oCheckDate.getTime())) {
+                oParsedDate = oCheckDate;
+              }
+            } else {
+              // Fallback option for standard ISO strings inside the row cellular cells
+              const oCheckDate = new Date(sRawDateStr);
+              if (!isNaN(oCheckDate.getTime())) {
+                oParsedDate = oCheckDate;
+              }
+            }
+          }
+
+          // Automatically generate analytical dashboard dropdown grouping tags
+          const sMonthLabel = aMonths[oParsedDate.getMonth()];
+          const sYearLabel = oParsedDate.getFullYear().toString();
+          aExistingLogs.push({
+            id: sDocId,
+            type: row["Document Type"] ? row["Document Type"].toString().trim() : "Quotation",
+            client: row["Client Name"] ? row["Client Name"].toString().trim() : "Bulk Import Profile",
+            amount: parseFloat(row["Grand Total (Rs.)"]) || 0,
+            lead: row["Lead Source"] ? row["Lead Source"].toString().trim() : "Direct",
+            timestamp: oParsedDate.toISOString(),
+            month: sMonthLabel,
+            year: sYearLabel
+          });
+        }
+      });
+
+      // 3. Save the expanded analytics entries back up onto cloud repository networks
+      await this._executeCloudRequest("PUT", this.sAnalyticsBinId, this.sLocalAnalyticsKey, null, {
+        records: aExistingLogs
+      });
+      sap.m.MessageToast.show(`Bulk Import Successful: Transaction history expanded and matched to summary layouts.`);
     }
   });
   return View;
