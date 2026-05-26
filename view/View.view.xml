@@ -19,6 +19,13 @@
                 objectSubtitle="GSTIN: 29AGKPP7288F1Z0"
             >
                 <Button
+                    text="Sync"
+                    icon="sap-icon://synchronize"
+                    type="Ghost"
+                    press="onSyncCloudDatabases"
+                    visible="false"
+                />
+                <Button
                     icon="sap-icon://customer-briefing"
                     press="onOpenCustomerDirectory"
                     type="Transparent"

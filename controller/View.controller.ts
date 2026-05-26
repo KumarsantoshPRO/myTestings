@@ -53,16 +53,122 @@ export default class View extends Controller {
     // Centralized Cloud Configuration Storage Pointers
     private sAnalyticsBinId: string = "6a1015ed6877513b27b3681c";
     private sBinId: string = "6a0ffb516610dd3ae8873764";
-    private sCustomerBinId: string = "6a1415b26877513b27cc8043"; // Dedicated Customer Registry Cloud Database Bucket
+    private sCustomerBinId: string = "6a1415b26877513b27cc8043";
     private sMasterKey: string = "$2a$10$QW2jbDsLe9nN3eAqSzg6v.Zz3jHv6WQfDk.HLgm4T3V0uvumxbx8i";
+
+    // Fallback Cloud Infrastructure Bucket String Reference
+    private sKvdbBucketId: string = "5fWJ9dpkjBP6UM5FJixuZz";
 
     // Storage Keys for Custom Template Tracking
     private sCustomNumKey: string = "my_billing_app_custom_numeric_seq";
     private sCustomSuffixKey: string = "my_billing_app_custom_suffix_format";
     private sCustomTriggerFlag: string = "my_billing_app_use_custom_start_flag";
 
+    // Local Failover Database Keys
+    private sLocalCounterKey: string = "fallback_local_invoice_counter";
+    private sLocalAnalyticsKey: string = "fallback_local_analytics_history";
+    private sLocalCustomerKey: string = "fallback_local_customers_registry";
+
     // Global Overlay Trackers for Automated Cascade Closures
     private oMainAnalyticsDialog: Dialog | null = null;
+
+    /**
+     * Central Network Engine with explicit error checking payload handlers.
+     */
+    private async _executeCloudRequest(sMethod: string, sBinId: string, sLocalKey: string, oDefaultStructure: any, oPayload?: any): Promise<any> {
+        const iTimeoutMs = 4000;
+        const oController = new AbortController();
+        const id = setTimeout(() => oController.abort(), iTimeoutMs);
+
+        const sJsonbinUrl = sMethod === "GET"
+            ? `https://api.jsonbin.io/v3/b/${sBinId}/latest`
+            : `https://api.jsonbin.io/v3/b/${sBinId}`;
+
+        const oJsonbinHeaders: any = { "X-Master-Key": this.sMasterKey };
+        if (sMethod === "PUT") { oJsonbinHeaders["Content-Type"] = "application/json"; }
+
+        try {
+            const response = await fetch(sJsonbinUrl, {
+                method: sMethod,
+                headers: oJsonbinHeaders,
+                body: oPayload ? JSON.stringify(oPayload) : undefined,
+                signal: oController.signal
+            });
+            clearTimeout(id);
+
+            if (!response.ok) throw new Error(`HTTP Error Status: ${response.status}`);
+            const result = await response.json();
+
+            if (sMethod === "GET" && result.record) {
+                localStorage.setItem(sLocalKey, JSON.stringify(result.record));
+                return result.record;
+            }
+            return result;
+
+        } catch (oNetworkError) {
+            clearTimeout(id);
+            console.warn(`Primary Cloud unreachable. Pulling browser client memory repository layout for key: ${sLocalKey}`, oNetworkError);
+
+            if (sMethod === "GET") {
+                const sLocalData = localStorage.getItem(sLocalKey);
+                if (!sLocalData) {
+                    localStorage.setItem(sLocalKey, JSON.stringify(oDefaultStructure));
+                    return oDefaultStructure;
+                }
+                try { return JSON.parse(sLocalData); } catch (e) { return oDefaultStructure; }
+            } else {
+                if (oPayload) {
+                    localStorage.setItem(sLocalKey, JSON.stringify(oPayload));
+                }
+                MessageToast.show("Working Offline: Saved locally into client browser runtime storage cache workspace.", { duration: 2000 });
+                return true;
+            }
+        }
+    }
+
+    /**
+     * Sync operation tool to align instances back to cloud setups.
+     * Updated to handle empty local cache checkpoints gracefully.
+     */
+    public async onSyncCloudDatabases(): Promise<void> {
+        const sCounterData = localStorage.getItem(this.sLocalCounterKey);
+        const sAnalyticsData = localStorage.getItem(this.sLocalAnalyticsKey);
+        const sCustomerData = localStorage.getItem(this.sLocalCustomerKey);
+
+        // If no local history exists at all, it means the application has always been online
+        if (!sCounterData && !sAnalyticsData && !sCustomerData) {
+            sap.m.MessageBox.information(
+                "Your application is completely up to date. There are no offline pending entries or staged logs to synchronize.",
+                { title: "Database Cloud Sync" }
+            );
+            return;
+        }
+
+        sap.ui.core.BusyIndicator.show(0);
+        try {
+            // Safely parse or provide fallback empty arrays to prevent server payload drops
+            const oCounterPayload = sCounterData ? JSON.parse(sCounterData) : { counter: 0 };
+            const oAnalyticsPayload = sAnalyticsData ? JSON.parse(sAnalyticsData) : { records: [] };
+            const oCustomerPayload = sCustomerData ? JSON.parse(sCustomerData) : { customers: [] };
+
+            // Synchronously push staging buffers up to their respective cloud bins
+            await fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}`, {
+                method: "PUT", headers: { "X-Master-Key": this.sMasterKey, "Content-Type": "application/json" }, body: JSON.stringify(oCounterPayload)
+            });
+            await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
+                method: "PUT", headers: { "X-Master-Key": this.sMasterKey, "Content-Type": "application/json" }, body: JSON.stringify(oAnalyticsPayload)
+            });
+            await fetch(`https://api.jsonbin.io/v3/b/${this.sCustomerBinId}`, {
+                method: "PUT", headers: { "X-Master-Key": this.sMasterKey, "Content-Type": "application/json" }, body: JSON.stringify(oCustomerPayload)
+            });
+
+            sap.m.MessageBox.success("Cloud restoration sequence complete. Core databases are successfully synchronized.");
+        } catch (err: any) {
+            sap.m.MessageBox.error(`Sync aborted: External server pipeline is still non-responsive. Pipeline Footprint: ${err.message}`);
+        } finally {
+            sap.ui.core.BusyIndicator.hide();
+        }
+    }
 
 
     public onInit(): void {
@@ -131,27 +237,13 @@ export default class View extends Controller {
                 sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
                 localStorage.removeItem(this.sCustomTriggerFlag);
             } else {
-                const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}/latest`, {
-                    method: "GET",
-                    headers: { "X-Master-Key": this.sMasterKey }
-                });
-                if (!response.ok) throw new Error("Could not retrieve current sequence from cloud server.");
-
-                const result = await response.json();
-                const iCurrentSequence = parseInt(result.record.counter) || 0;
+                const record = await this._executeCloudRequest("GET", this.sBinId, this.sLocalCounterKey, { counter: 0 });
+                const iCurrentSequence = parseInt(record.counter) || 0;
                 iNextSequence = iCurrentSequence + 1;
                 sSuffixFormat = localStorage.getItem(this.sCustomSuffixKey) || `/${this._getDefaultFYLabel()}`;
             }
 
-            const updateResponse = await fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-Master-Key": this.sMasterKey
-                },
-                body: JSON.stringify({ counter: iNextSequence })
-            });
-            if (!updateResponse.ok) throw new Error("Failed to write updated sequence index block back to database.");
+            await this._executeCloudRequest("PUT", this.sBinId, this.sLocalCounterKey, { counter: iNextSequence }, { counter: iNextSequence });
 
             localStorage.setItem(this.sCustomNumKey, iNextSequence.toString());
             const sPaddedSequence = iNextSequence < 10 ? `0${iNextSequence}` : `${iNextSequence}`;
@@ -195,15 +287,7 @@ export default class View extends Controller {
                     const sExtractedSuffix = aParts.length > 1 ? `/${aParts.slice(1).join("/")}` : `/${this._getDefaultFYLabel()}`;
 
                     BusyIndicator.show(0);
-                    fetch(`https://api.jsonbin.io/v3/b/${this.sBinId}`, {
-                        method: "PUT",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-Master-Key": this.sMasterKey
-                        },
-                        body: JSON.stringify({ counter: iNewSequenceValue })
-                    }).then((res) => {
-                        if (!res.ok) throw new Error("Database update rejected.");
+                    this._executeCloudRequest("PUT", this.sBinId, this.sLocalCounterKey, { counter: iNewSequenceValue }, { counter: iNewSequenceValue }).then(() => {
                         localStorage.setItem(this.sCustomNumKey, iNewSequenceValue.toString());
                         localStorage.setItem(this.sCustomSuffixKey, sExtractedSuffix);
                         localStorage.setItem(this.sCustomTriggerFlag, "X");
@@ -336,7 +420,7 @@ export default class View extends Controller {
         oModel.setProperty("/totalSum", (fGrandTotal + gstAmount).toFixed(2));
         oModel.refresh();
     }
-
+    // PDF Generation Logic with Dynamic Table Structuring and Footer Pinning
     public onGeneratePDF(): void {
         this.onSaveLocalStorage();
 
@@ -385,6 +469,12 @@ export default class View extends Controller {
             index + 1, item.productName, item.quantity, item.price + item.symbol, formatINR(item.total)
         ]);
 
+        // Increased to 14 rows to cleanly fill the empty middle canvas space
+        const iTargetRowsCount = 14;
+        while (tableBody.length < iTargetRowsCount) {
+            tableBody.push(["", "", "", "", ""]);
+        }
+
         const subtotal = aItems.reduce((acc: number, cur: any) => acc + parseFloat(cur.total || 0), 0);
         const gstAmount = subtotal * 0.18;
         const grandTotal = subtotal + gstAmount;
@@ -401,38 +491,38 @@ export default class View extends Controller {
             head: [['Sl.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']],
             body: tableBody,
             theme: 'grid',
-            styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.1 },
+            styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
             headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold' },
-            columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 20, halign: 'center' }, 3: { cellWidth: 25, halign: 'right' }, 4: { cellWidth: 30, halign: 'right' } }
+            columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 20, halign: 'center' }, 3: { cellWidth: 25, halign: 'right' }, 4: { cellWidth: 30, halign: 'right' } },
+            didParseCell: function (data: any) {
+                const isTotalRow = data.row.index >= tableBody.length - (bShowGST && bShowTotal ? 2 : 1);
+                if (data.section === 'body' && !isTotalRow) {
+                    data.cell.styles.lineWidth = { top: 0, right: 0.1, bottom: 0, left: 0.1 };
+                    if (data.row.index === 0) { data.cell.styles.lineWidth.top = 0.1; }
+                    if (data.row.index === tableBody.length - 1) { data.cell.styles.lineWidth.bottom = 0.1; }
+                }
+            }
         });
 
-        let finalY = (doc as any).lastAutoTable.finalY;
+        // FIXED CRITICAL ALIGNMENT: Placed directly at fixed bottom offsets to remove floating white spaces
+        let runningY = pageHeight - 90;
 
         if (oHeader.TermsAndConditions !== "") {
-            finalY += 10;
-            doc.setFont("helvetica", "bold");
-            doc.text("Terms & Conditions:", 14, finalY);
-            doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 4);
+            doc.setFont("helvetica", "bold"); doc.text("Terms & Conditions:", 14, runningY);
+            doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, runningY + 4);
+            runningY += 14;
         }
-
         if (oHeader.Notes !== "") {
-            finalY += 20;
-            doc.setFont("helvetica", "bold");
-            doc.text("Notes:", 14, finalY);
-            doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oHeader.Notes, pageWidth - 28), 14, finalY + 4);
+            doc.setFont("helvetica", "bold"); doc.text("Notes:", 14, runningY);
+            doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oHeader.Notes, pageWidth - 28), 14, runningY + 4);
+            runningY += 14;
         }
-
         if ((this.getView()?.byId("chkBankDetail") as CheckBox).getSelected()) {
-            finalY += 20;
-            doc.setFont("helvetica", "bold");
-            doc.text("Bank Details:", 14, finalY);
-            doc.setFont("helvetica", "normal");
-            doc.text(doc.splitTextToSize(oHeader.BankDetails, pageWidth - 28), 14, finalY + 4);
+            doc.setFont("helvetica", "bold"); doc.text("Bank Details:", 14, runningY);
+            doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oHeader.BankDetails, pageWidth - 28), 14, runningY + 4);
         }
 
-        if (this.sSignaturBase64) { doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 40, 70, 25); }
+        if (this.sSignaturBase64) { doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 32, 70, 22); }
 
         const sTargetFilename = this._getFirstLineName(oHeader.To) + "_Quotation.pdf";
         doc.save(sTargetFilename);
@@ -441,50 +531,8 @@ export default class View extends Controller {
         this.onGenerateWord("Quotation");
 
         const sClient = this._getFirstLineName(oHeader.To);
-        const sSelLead = oHeader.LeadSource || "Direct"; // Captured but excluded from final printed PDF outputs
+        const sSelLead = oHeader.LeadSource || "Direct";
         this._logDocumentAnalytics("Quotation", sTargetFilename, sClient, grandTotal, sSelLead);
-    }
-
-    public onTaxAddRow(): void {
-        const oModel = this.getView()?.getModel() as JSONModel;
-        const aProducts = oModel.getProperty("/taxProducts");
-        aProducts.push({ taxpProductName: "", taxHSNCode: "", taxQuantity: 1, taxPrice: 0, taxSymbol: "", taxTotal: "0.00" });
-        oModel.setProperty("/taxProducts", aProducts);
-    }
-
-    public onTaxDelete(oEvent: any): void {
-        const oItemToDelete = oEvent.getParameter("listItem") as ColumnListItem;
-        const sPath = oItemToDelete.getBindingContext()!.getPath();
-        const iIndex = parseInt(sPath.split("/").pop()!);
-        const oModel = this.getView()?.getModel() as JSONModel;
-        const aProducts = oModel.getProperty("/taxProducts");
-        aProducts.splice(iIndex, 1);
-        oModel.setProperty("/taxProducts", aProducts);
-        this.onTaxCalc();
-    }
-
-    public onTaxCalc(): void {
-        const oModel = this.getView()?.getModel() as JSONModel;
-        const aProducts = oModel.getProperty("/taxProducts");
-        let fGrandTotal = 0;
-        let taxcgst = 0;
-        let taxsgst = 0;
-
-        aProducts.forEach((oProduct: any) => {
-            const fQty = parseFloat(oProduct.taxQuantity) || 0;
-            const fPrice = parseFloat(oProduct.taxPrice) || 0;
-            let fRowTotal = fQty * fPrice;
-            oProduct.taxTotal = fRowTotal.toFixed(2);
-            taxcgst += (fRowTotal * 0.09);
-            taxsgst += (fRowTotal * 0.09);
-            fGrandTotal += fRowTotal;
-        });
-
-        oModel.setProperty("/taxtotal", fGrandTotal.toFixed(2));
-        oModel.setProperty("/taxcgst", taxcgst.toFixed(2));
-        oModel.setProperty("/taxsgst", taxsgst.toFixed(2));
-        oModel.setProperty("/taxtotalSum", (fGrandTotal + taxcgst + taxsgst).toFixed(2));
-        oModel.refresh();
     }
 
     public onTaxInvoicePDF(): void {
@@ -530,7 +578,12 @@ export default class View extends Controller {
             index + 1, item.taxpProductName, item.taxHSNCode, formatINR(item.taxPrice) + item.taxSymbol, item.taxQuantity, formatINR(item.taxTotal)
         ]);
 
-        const totalAmount = oData.taxProducts.reduce((sum: number, item: any) => sum + parseFloat(item.taxTotal), 0);
+        const iTargetRowsCount = 12;
+        while (tableRows.length < iTargetRowsCount) {
+            tableRows.push(["", "", "", "", "", ""]);
+        }
+
+        const totalAmount = oData.taxProducts.reduce((sum: number, item: any) => sum + parseFloat(item.taxTotal || 0), 0);
         const taxVal = totalAmount * 0.09;
         const grandTotal = totalAmount + (taxVal * 2);
 
@@ -548,31 +601,29 @@ export default class View extends Controller {
             theme: 'grid',
             styles: { fontSize: 8, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
             headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
-            columnStyles: { 0: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'center' }, 5: { halign: 'right' } },
+            columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 20, halign: 'center' }, 3: { cellWidth: 25, halign: 'right' }, 4: { cellWidth: 25, halign: 'center' }, 5: { cellWidth: 30, halign: 'right' } },
             didParseCell: function (data: any) {
-                const totalRowsCount = 4;
-                const isTotalRow = data.row.index >= (tableRows.length - totalRowsCount);
-                if (isTotalRow) {
-                    data.cell.styles.lineWidth = { top: 0.1, right: 0, bottom: 0.1, left: 0 };
-                    if (data.column.index === 5) { data.cell.styles.lineWidth = { top: 0.1, right: 0.1, bottom: 0.1, left: 0 }; }
-                    if (data.column.index === 0) { data.cell.styles.lineWidth = { top: 0.1, right: 0, bottom: 0.1, left: 0.1 }; }
+                const isTotalRow = data.row.index >= (tableRows.length - 4);
+                if (data.section === 'body' && !isTotalRow) {
+                    data.cell.styles.lineWidth = { top: 0, right: 0.1, bottom: 0, left: 0.1 };
+                    if (data.row.index === 0) { data.cell.styles.lineWidth.top = 0.1; }
+                    if (data.row.index === (tableRows.length - 5)) { data.cell.styles.lineWidth.bottom = 0.1; }
                 }
             }
         });
 
-        const finalY = (doc as any).lastAutoTable.finalY + 5;
-        doc.line(startX, finalY + 5, endX, finalY + 5);
+        // FIXED CRITICAL ALIGNMENT: Placed directly at fixed bottom offsets to remove floating white spaces
+        const baseFooterY = pageHeight - 82;
+        doc.line(startX, baseFooterY, endX, baseFooterY);
 
         doc.setFont("helvetica", "normal");
-        doc.text(`Rupees in words: ${this.numberToWords(grandTotal)} Only`, 10, finalY + 10);
-        doc.text(`Party GST No: ${oData.taxHeader.PartyGST || ""}`, 10, finalY + 18);
+        doc.text(`Rupees in words: ${this.numberToWords(grandTotal)} Only`, 10, baseFooterY + 6);
+        doc.text(`Party GST No: ${oData.taxHeader.PartyGST || ""}`, 10, baseFooterY + 13);
 
-        doc.setFont("helvetica", "bold");
-        doc.text("Bank Details", 10, finalY + 28);
-        doc.setFont("helvetica", "normal");
-        doc.text(doc.splitTextToSize(oData.taxHeader.BankDetails, 100), 10, finalY + 33);
+        doc.setFont("helvetica", "bold"); doc.text("Bank Details", 10, baseFooterY + 22);
+        doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oData.taxHeader.BankDetails, 110), 10, baseFooterY + 27);
 
-        if (this.sSignaturBase64) { doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 40, 70, 25); }
+        if (this.sSignaturBase64) { doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 32, 70, 22); }
 
         const sTargetFilename = this._getFirstLineName(oData.taxHeader.To) + "_TaxInvoice.pdf";
         doc.save(sTargetFilename);
@@ -583,32 +634,6 @@ export default class View extends Controller {
         const sClient = this._getFirstLineName(oData.taxHeader.To);
         const sSelLead = oData.taxHeader.LeadSource || "Direct";
         this._logDocumentAnalytics("TAX-INVOICE", oData.taxHeader.InvoiceNo, sClient, grandTotal, sSelLead);
-    }
-
-    public onCashAddRow(): void {
-        const oModel = this.getView()?.getModel() as JSONModel;
-        const aProducts = oModel.getProperty("/cashProducts");
-        aProducts.push({ cashBody: "", cashQuantity: "1", cashAmount: "0.00" });
-        oModel.setProperty("/cashProducts", aProducts);
-    }
-
-    public onCashDelete(oEvent: any): void {
-        const oItemToDelete = oEvent.getParameter("listItem") as ColumnListItem;
-        const sPath = oItemToDelete.getBindingContext()!.getPath();
-        const iIndex = parseInt(sPath.split("/").pop()!);
-        const oModel = this.getView()?.getModel() as JSONModel;
-        const aProducts = oModel.getProperty("/cashProducts");
-        aProducts.splice(iIndex, 1);
-        oModel.setProperty("/cashProducts", aProducts);
-        this.onCashCalc();
-    }
-
-    public onCashCalc(): void {
-        const oModel = this.getView()?.getModel() as JSONModel;
-        const aProducts = oModel.getProperty("/cashProducts") || [];
-        let totalAmount = 0;
-        aProducts.forEach((item: any) => { totalAmount += parseFloat(item.cashAmount || 0); });
-        oModel.setProperty("/cashTotalSum", totalAmount.toFixed(2));
     }
 
     public onCashBillPDF(): void {
@@ -644,15 +669,18 @@ export default class View extends Controller {
         doc.text(doc.splitTextToSize(oData.cashHeader.cashTo, 90), 15, 51);
 
         doc.text(`Date: ${oData.cashHeader.cashDate}`, pageWidth - 14, 46, { align: 'right' });
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(14);
         doc.text(`Cash Bill`, pageWidth / 2, 72, { align: 'center' });
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(10);
 
         const tableRows = oData.cashProducts.map((item: any, index: number) => [
             index + 1, item.cashBody, item.cashQuantity, formatINR(item.cashAmount)
         ]);
+
+        const iTargetRowsCount = 12;
+        while (tableRows.length < iTargetRowsCount) {
+            tableRows.push(["", "", "", ""]);
+        }
 
         const totalAmount = oData.cashProducts.reduce((sum: number, item: any) => sum + parseFloat(item.cashAmount || 0), 0);
         tableRows.push([
@@ -665,21 +693,29 @@ export default class View extends Controller {
             head: [["SI No.", "Particulars", "Quantity", "Amount"]],
             body: tableRows,
             theme: 'grid',
-            columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 25, halign: 'center' }, 3: { cellWidth: 35, halign: 'right' } }
+            styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
+            columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 25, halign: 'center' }, 3: { cellWidth: 35, halign: 'right' } },
+            didParseCell: function (data: any) {
+                const isTotalRow = data.row.index === tableRows.length - 1;
+                if (data.section === 'body' && !isTotalRow) {
+                    data.cell.styles.lineWidth = { top: 0, right: 0.1, bottom: 0, left: 0.1 };
+                    if (data.row.index === 0) { data.cell.styles.lineWidth.top = 0.1; }
+                    if (data.row.index === tableRows.length - 2) { data.cell.styles.lineWidth.bottom = 0.1; }
+                }
+            }
         });
 
-        const finalY = (doc as any).lastAutoTable.finalY + 5;
-        doc.line(startX, finalY + 5, endX, finalY + 5);
+        // FIXED CRITICAL ALIGNMENT: Placed directly at fixed bottom offsets to remove floating white spaces
+        const baseFooterY = pageHeight - 82;
+        doc.line(startX, baseFooterY, endX, baseFooterY);
 
         doc.setFont("helvetica", "normal");
-        doc.text(`Rupees in words: ${this.numberToWords(totalAmount)} Only`, 10, finalY + 10);
+        doc.text(`Rupees in words: ${this.numberToWords(totalAmount)} Only`, 10, baseFooterY + 6);
 
-        doc.setFont("helvetica", "bold");
-        doc.text("Bank Details", 10, finalY + 28);
-        doc.setFont("helvetica", "normal");
-        doc.text(doc.splitTextToSize(oData.cashHeader.cashbankDetails, 100), 10, finalY + 33);
+        doc.setFont("helvetica", "bold"); doc.text("Bank Details", 10, baseFooterY + 22);
+        doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oData.cashHeader.cashbankDetails, 110), 10, baseFooterY + 27);
 
-        if (this.sSignaturBase64) { doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 40, 70, 25); }
+        if (this.sSignaturBase64) { doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 35, 70, 22); }
 
         const sTargetFilename = this._getFirstLineName(oData.cashHeader.cashTo) + "_CashBill.pdf";
         doc.save(sTargetFilename);
@@ -691,6 +727,224 @@ export default class View extends Controller {
         const sSelLead = oData.cashHeader.LeadSource || "Direct";
         this._logDocumentAnalytics("Cash Bill", sTargetFilename, sClient, totalAmount, sSelLead);
     }
+
+
+    public async onShareToWhatsApp(): Promise<void> {
+        const oView = this.getView();
+        if (!oView) return;
+
+        const sSelectMode = (oView.byId("mySelect") as Select).getSelectedItem()?.getText();
+        const oModel = oView.getModel() as JSONModel;
+        const jspdfLib = (window as any).jspdf;
+
+        if (!jspdfLib) { MessageBox.error("jsPDF library is not loaded."); return; }
+
+        let sClientName = ""; let sTotalAmount = ""; let sDocIdentifier = ""; let sRawAddressText = ""; let sTargetFilename = "Document.pdf";
+        const doc = new jspdfLib.jsPDF();
+        const pageWidth = doc.internal.pageSize.width; const pageHeight = doc.internal.pageSize.height; const margin = 5;
+
+        doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.3); doc.rect(margin, margin, pageWidth - (margin * 2), pageHeight - (margin * 2));
+        if (this.sLogoBase64) { doc.addImage(this.sLogoBase64, 'JPEG', 14, 10, 70, 25); }
+
+        doc.setFontSize(10);
+        doc.text("Ph: (Off.): 2348 1249", pageWidth - 14, 15, { align: 'right' });
+        doc.text("97400 27266 / 98442 11193", pageWidth - 14, 20, { align: 'right' });
+        doc.text("E-mail: intelecompatil@rediffmail.com", pageWidth - 14, 25, { align: 'right' });
+        doc.setFontSize(9);
+        doc.text("#249, 7th Main, 4th Cross, 2nd Stage,", pageWidth - 14, 30, { align: 'right' });
+        doc.text("Nagarabhavi, Bangalore-560072", pageWidth - 14, 35, { align: 'right' });
+        doc.line(5, 40, pageWidth - 5, 40);
+
+        if (sSelectMode === "Quotation") {
+            const oHeader = oModel.getProperty("/header");
+            const aItems = oModel.getProperty("/products");
+            sRawAddressText = oHeader.To || ""; sClientName = this._getFirstLineName(sRawAddressText);
+            sTotalAmount = formatINR(oModel.getProperty("/totalSum")); sDocIdentifier = "Quotation"; sTargetFilename = `${sClientName}_Quotation.pdf`;
+
+            doc.setFont("helvetica", "bold"); doc.text(`Date: ${oHeader.Date}`, pageWidth - 14, 45, { align: 'right' }); doc.text("To,", 14, 45);
+            doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oHeader.To, 80), 14, 50);
+            doc.setFont("helvetica", "bold"); let finalHeaderY = 70; doc.text("Sub: " + oHeader.Subject, 14, 70);
+            doc.setFont("helvetica", "normal"); if (oHeader.AddtionalInfo !== "") { doc.text(oHeader.AddtionalInfo, 14, finalHeaderY + 4); }
+
+            const bShowGST = (oView.byId("chkGST") as CheckBox).getSelected();
+            const bShowTotal = (oView.byId("chkTotal") as CheckBox).getSelected();
+
+            const tableBody = aItems.map((item: any, index: number) => [index + 1, item.productName, item.quantity, item.price + item.symbol, formatINR(item.total)]);
+            while (tableBody.length < 8) { tableBody.push(["", "", "", "", ""]); }
+
+            const subtotal = aItems.reduce((acc: number, cur: any) => acc + parseFloat(cur.total || 0), 0);
+            const gstAmount = subtotal * 0.18; const grandTotal = subtotal + gstAmount;
+
+            if (bShowGST) tableBody.push([{ content: '18% GST Amount', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(gstAmount), styles: { halign: 'right', fontStyle: 'bold' } }]);
+            if (bShowTotal) tableBody.push([{ content: 'Total', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(grandTotal), styles: { halign: 'right', fontStyle: 'bold' } }]);
+
+            (doc as any).autoTable({
+                startY: finalHeaderY + 8, head: [['Sl.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']], body: tableBody, theme: 'grid', styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
+                didParseCell: function (data: any) {
+                    const isTotalRow = data.row.index >= tableBody.length - (bShowGST && bShowTotal ? 2 : 1);
+                    if (data.section === 'body' && !isTotalRow) {
+                        data.cell.styles.lineWidth = { top: 0, right: 0.1, bottom: 0, left: 0.1 };
+                        if (data.row.index === 0) { data.cell.styles.lineWidth.top = 0.1; }
+                        if (data.row.index === tableBody.length - 1) { data.cell.styles.lineWidth.bottom = 0.1; }
+                    }
+                }
+            });
+
+            let runningY = (doc as any).lastAutoTable.finalY + 10;
+            if (oHeader.TermsAndConditions !== "") { doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, runningY + 4); runningY += 15; }
+            if ((oView.byId("chkBankDetail") as CheckBox).getSelected()) { doc.text(doc.splitTextToSize(oHeader.BankDetails, pageWidth - 28), 14, runningY + 4); }
+            const sSelLead = oHeader.LeadSource || "Direct";
+            this._logDocumentAnalytics("Quotation", sTargetFilename, sClientName, grandTotal, sSelLead);
+        } else if (sSelectMode === "TAX-INVOICE") {
+            const oData = oModel.getData();
+            sRawAddressText = oData.taxHeader.To || ""; sClientName = this._getFirstLineName(sRawAddressText);
+            sTotalAmount = formatINR(oModel.getProperty("/taxtotalSum")); sDocIdentifier = `Tax Invoice (${oData.taxHeader.InvoiceNo || "N/A"})`; sTargetFilename = `${sClientName}_TaxInvoice.pdf`;
+
+            doc.setFont("helvetica", "bold"); doc.text("To,", 15, 44); doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oData.taxHeader.To, 90), 15, 49);
+            const metaX = 130; doc.text(`GST No: ${oData.taxHeader.GSTNo}`, metaX, 44); doc.text(`Invoice No: ${oData.taxHeader.InvoiceNo}`, metaX, 50); doc.text(`Date: ${oData.taxHeader.Date}`, metaX, 56);
+
+            const tableRows = oData.taxProducts.map((item: any, index: number) => [index + 1, item.taxpProductName, item.taxHSNCode, formatINR(item.taxPrice) + item.taxSymbol, item.taxQuantity, formatINR(item.taxTotal)]);
+            while (tableRows.length < 8) { tableRows.push(["", "", "", "", "", ""]); }
+
+            const totalAmount = oData.taxProducts.reduce((sum: number, item: any) => sum + parseFloat(item.taxTotal), 0);
+            const taxVal = totalAmount * 0.09; const grandTotal = totalAmount + (taxVal * 2);
+
+            tableRows.push(
+                [{ content: `TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(totalAmount), styles: { halign: 'right', fontStyle: 'bold' } }],
+                [{ content: `GRAND TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }, { content: formatINR(grandTotal), styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }]
+            );
+
+            (doc as any).autoTable({
+                startY: 75, head: [["SI No.", "Particulars", "HSN Code", "Rate", "No.of Units", "Amount"]], body: tableRows, theme: 'grid', styles: { fontSize: 8, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
+                didParseCell: function (data: any) {
+                    const isTotalRow = data.row.index >= (tableRows.length - 4);
+                    if (data.section === 'body' && !isTotalRow) {
+                        data.cell.styles.lineWidth = { top: 0, right: 0.1, bottom: 0, left: 0.1 };
+                        if (data.row.index === 0) { data.cell.styles.lineWidth.top = 0.1; }
+                        if (data.row.index === (tableRows.length - 5)) { data.cell.styles.lineWidth.bottom = 0.1; }
+                    }
+                }
+            });
+
+            let runningY = (doc as any).lastAutoTable.finalY + 8; doc.line(5, runningY, 205, runningY);
+            doc.text(`Rupees in words: ${this.numberToWords(grandTotal)} Only`, 10, runningY + 6);
+            const sSelLead = oData.taxHeader.LeadSource || "Direct";
+            this._logDocumentAnalytics("TAX-INVOICE", oData.taxHeader.InvoiceNo, sClientName, grandTotal, sSelLead);
+        } else {
+            const oData = oModel.getData();
+            sRawAddressText = oData.cashHeader.cashTo || ""; sClientName = this._getFirstLineName(sRawAddressText);
+            sTotalAmount = formatINR(oModel.getProperty("/cashTotalSum")); sDocIdentifier = "Cash Bill"; sTargetFilename = `${sClientName}_CashBill.pdf`;
+
+            doc.setFont("helvetica", "bold"); doc.text("To,", 15, 46); doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oData.cashHeader.cashTo, 90), 15, 51);
+            doc.text(`Date: ${oData.cashHeader.cashDate}`, pageWidth - 14, 46, { align: 'right' });
+
+            const tableRows = oData.cashProducts.map((item: any, index: number) => [index + 1, item.cashBody, item.cashQuantity, formatINR(item.cashAmount)]);
+            while (tableRows.length < 8) { tableRows.push(["", "", "", ""]); }
+
+            const totalAmount = oData.cashProducts.reduce((sum: number, item: any) => sum + parseFloat(item.cashAmount || 0), 0);
+            tableRows.push([{ content: `GRAND TOTAL:`, colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }, { content: formatINR(totalAmount), styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }]);
+
+            (doc as any).autoTable({
+                startY: 75, head: [["SI No.", "Particulars", "Quantity", "Amount"]], body: tableRows, theme: 'grid', styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
+                didParseCell: function (data: any) {
+                    const isTotalRow = data.row.index === tableRows.length - 1;
+                    if (data.section === 'body' && !isTotalRow) {
+                        data.cell.styles.lineWidth = { top: 0, right: 0.1, bottom: 0, left: 0.1 };
+                        if (data.row.index === 0) { data.cell.styles.lineWidth.top = 0.1; }
+                        if (data.row.index === tableRows.length - 2) { data.cell.styles.lineWidth.bottom = 0.1; }
+                    }
+                }
+            });
+
+            let runningY = (doc as any).lastAutoTable.finalY + 8; doc.line(5, runningY, 205, runningY);
+            const sSelLead = oData.cashHeader.LeadSource || "Direct";
+            this._logDocumentAnalytics("Cash Bill", sTargetFilename, sClientName, totalAmount, sSelLead);
+        }
+
+        if (this.sSignaturBase64) { doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 35, 70, 22); }
+        const blobHTML5 = doc.output('blob');
+        const pdfFile = new File([blobHTML5], sTargetFilename, { type: 'application/pdf' });
+
+        if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+            navigator.share({ files: [pdfFile], title: `${sDocIdentifier}`, text: `Hello ${sClientName}` }).catch(console.error);
+        } else {
+            doc.save(sTargetFilename);
+        }
+    }
+
+    public onTaxAddRow(): void {
+        const oModel = this.getView()?.getModel() as JSONModel;
+        const aProducts = oModel.getProperty("/taxProducts");
+        aProducts.push({ taxpProductName: "", taxHSNCode: "", taxQuantity: 1, taxPrice: 0, taxSymbol: "", taxTotal: "0.00" });
+        oModel.setProperty("/taxProducts", aProducts);
+    }
+
+    public onTaxDelete(oEvent: any): void {
+        const oItemToDelete = oEvent.getParameter("listItem") as ColumnListItem;
+        const sPath = oItemToDelete.getBindingContext()!.getPath();
+        const iIndex = parseInt(sPath.split("/").pop()!);
+        const oModel = this.getView()?.getModel() as JSONModel;
+        const aProducts = oModel.getProperty("/taxProducts");
+        aProducts.splice(iIndex, 1);
+        oModel.setProperty("/taxProducts", aProducts);
+        this.onTaxCalc();
+    }
+
+    public onTaxCalc(): void {
+        const oModel = this.getView()?.getModel() as JSONModel;
+        const aProducts = oModel.getProperty("/taxProducts");
+        let fGrandTotal = 0;
+        let taxcgst = 0;
+        let taxsgst = 0;
+
+        aProducts.forEach((oProduct: any) => {
+            const fQty = parseFloat(oProduct.taxQuantity) || 0;
+            const fPrice = parseFloat(oProduct.taxPrice) || 0;
+            let fRowTotal = fQty * fPrice;
+            oProduct.taxTotal = fRowTotal.toFixed(2);
+            taxcgst += (fRowTotal * 0.09);
+            taxsgst += (fRowTotal * 0.09);
+            fGrandTotal += fRowTotal;
+        });
+
+        oModel.setProperty("/taxtotal", fGrandTotal.toFixed(2));
+        oModel.setProperty("/taxcgst", taxcgst.toFixed(2));
+        oModel.setProperty("/taxsgst", taxsgst.toFixed(2));
+        oModel.setProperty("/taxtotalSum", (fGrandTotal + taxcgst + taxsgst).toFixed(2));
+        oModel.refresh();
+    }
+
+
+
+
+    public onCashAddRow(): void {
+        const oModel = this.getView()?.getModel() as JSONModel;
+        const aProducts = oModel.getProperty("/cashProducts");
+        aProducts.push({ cashBody: "", cashQuantity: "1", cashAmount: "0.00" });
+        oModel.setProperty("/cashProducts", aProducts);
+    }
+
+    public onCashDelete(oEvent: any): void {
+        const oItemToDelete = oEvent.getParameter("listItem") as ColumnListItem;
+        const sPath = oItemToDelete.getBindingContext()!.getPath();
+        const iIndex = parseInt(sPath.split("/").pop()!);
+        const oModel = this.getView()?.getModel() as JSONModel;
+        const aProducts = oModel.getProperty("/cashProducts");
+        aProducts.splice(iIndex, 1);
+        oModel.setProperty("/cashProducts", aProducts);
+        this.onCashCalc();
+    }
+
+    public onCashCalc(): void {
+        const oModel = this.getView()?.getModel() as JSONModel;
+        const aProducts = oModel.getProperty("/cashProducts") || [];
+        let totalAmount = 0;
+        aProducts.forEach((item: any) => { totalAmount += parseFloat(item.cashAmount || 0); });
+        oModel.setProperty("/cashTotalSum", totalAmount.toFixed(2));
+    }
+
+
+
 
     public onExcelDownload(oEvent: any, sOverrideMode?: string): void {
         const sSelectMode = sOverrideMode || (this.getView()?.byId("mySelect") as Select).getSelectedItem()?.getText();
@@ -922,137 +1176,7 @@ export default class View extends Controller {
         }
     }
 
-    public async onShareToWhatsApp(): Promise<void> {
-        const oView = this.getView();
-        if (!oView) return;
 
-        const sSelectMode = (oView.byId("mySelect") as Select).getSelectedItem()?.getText();
-        const oModel = oView.getModel() as JSONModel;
-        const jspdfLib = (window as any).jspdf;
-
-        if (!jspdfLib) {
-            MessageBox.error("jsPDF library is not loaded.");
-            return;
-        }
-
-        let sClientName = ""; let sTotalAmount = ""; let sDocIdentifier = ""; let sRawAddressText = ""; let sTargetFilename = "Document.pdf";
-
-        const doc = new jspdfLib.jsPDF();
-        const pageWidth = doc.internal.pageSize.width; const pageHeight = doc.internal.pageSize.height; const margin = 5;
-
-        doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.3); doc.rect(margin, margin, pageWidth - (margin * 2), pageHeight - (margin * 2));
-
-        if (this.sLogoBase64) { doc.addImage(this.sLogoBase64, 'JPEG', 14, 10, 70, 25); }
-
-        doc.setFontSize(10);
-        doc.text("Ph: (Off.): 2348 1249", pageWidth - 14, 15, { align: 'right' });
-        doc.text("97400 27266 / 98442 11193", pageWidth - 14, 20, { align: 'right' });
-        doc.text("E-mail: intelecompatil@rediffmail.com", pageWidth - 14, 25, { align: 'right' });
-        doc.setFontSize(9);
-        doc.text("#249, 7th Main, 4th Cross, 2nd Stage,", pageWidth - 14, 30, { align: 'right' });
-        doc.text("Nagarabhavi, Bangalore-560072", pageWidth - 14, 35, { align: 'right' });
-        doc.line(5, 40, pageWidth - 5, 40);
-
-        if (sSelectMode === "Quotation") {
-            const oHeader = oModel.getProperty("/header");
-            const aItems = oModel.getProperty("/products");
-            sRawAddressText = oHeader.To || ""; sClientName = this._getFirstLineName(sRawAddressText);
-            sTotalAmount = formatINR(oModel.getProperty("/totalSum")); sDocIdentifier = "Quotation"; sTargetFilename = `${sClientName}_Quotation.pdf`;
-
-            doc.setFont("helvetica", "bold"); doc.text(`Date: ${oHeader.Date}`, pageWidth - 14, 45, { align: 'right' }); doc.text("To,", 14, 45);
-            doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oHeader.To, 80), 14, 50);
-            doc.setFont("helvetica", "bold"); let finalHeaderY = 70; doc.text("Sub: " + oHeader.Subject, 14, 70);
-            doc.setFont("helvetica", "normal"); if (oHeader.AddtionalInfo !== "") { doc.text(oHeader.AddtionalInfo, 14, finalHeaderY + 4); }
-
-            const bShowGST = (oView.byId("chkGST") as CheckBox).getSelected();
-            const bShowTotal = (oView.byId("chkTotal") as CheckBox).getSelected();
-            const tableBody = aItems.map((item: any, index: number) => [index + 1, item.productName, item.quantity, item.price + item.symbol, formatINR(item.total)]);
-            const subtotal = aItems.reduce((acc: number, cur: any) => acc + parseFloat(cur.total || 0), 0);
-            const gstAmount = subtotal * 0.18; const grandTotal = subtotal + gstAmount;
-
-            if (bShowGST) tableBody.push([{ content: '18% GST Amount', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(gstAmount), styles: { halign: 'right', fontStyle: 'bold' } }]);
-            if (bShowTotal) tableBody.push([{ content: 'Total', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(grandTotal), styles: { halign: 'right', fontStyle: 'bold' } }]);
-
-            (doc as any).autoTable({
-                startY: finalHeaderY + 8, head: [['Sl.No.', 'Particulars', 'Quantity', 'Rate', 'Total (Rs.)']], body: tableBody, theme: 'grid',
-                styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.1 }, headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold' }
-            });
-
-            let finalY = (doc as any).lastAutoTable.finalY;
-            if (oHeader.TermsAndConditions !== "") { finalY += 10; doc.text(doc.splitTextToSize(oHeader.TermsAndConditions, pageWidth - 28), 14, finalY + 4); }
-            if ((oView.byId("chkBankDetail") as CheckBox).getSelected()) { finalY += 20; doc.text(doc.splitTextToSize(oHeader.BankDetails, pageWidth - 28), 14, finalY + 4); }
-
-            const sSelLead = oHeader.LeadSource || "Direct";
-            this._logDocumentAnalytics("Quotation", sTargetFilename, sClientName, grandTotal, sSelLead);
-        } else if (sSelectMode === "TAX-INVOICE") {
-            const oData = oModel.getData();
-            sRawAddressText = oData.taxHeader.To || ""; sClientName = this._getFirstLineName(sRawAddressText);
-            sTotalAmount = formatINR(oModel.getProperty("/taxtotalSum")); sDocIdentifier = `Tax Invoice (${oData.taxHeader.InvoiceNo || "N/A"})`; sTargetFilename = `${sClientName}_TaxInvoice.pdf`;
-
-            doc.setFont("helvetica", "bold"); doc.text("To,", 15, 44); doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oData.taxHeader.To, 90), 15, 49);
-            const metaX = 130; doc.text(`GST No: ${oData.taxHeader.GSTNo}`, metaX, 44); doc.text(`Invoice No: ${oData.taxHeader.InvoiceNo}`, metaX, 50); doc.text(`Date: ${oData.taxHeader.Date}`, metaX, 56);
-
-            const tableRows = oData.taxProducts.map((item: any, index: number) => [index + 1, item.taxpProductName, item.taxHSNCode, formatINR(item.taxPrice) + item.taxSymbol, item.taxQuantity, formatINR(item.taxTotal)]);
-            const totalAmount = oData.taxProducts.reduce((sum: number, item: any) => sum + parseFloat(item.taxTotal), 0);
-            const taxVal = totalAmount * 0.09; const grandTotal = totalAmount + (taxVal * 2);
-
-            tableRows.push(
-                [{ content: `TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatINR(totalAmount), styles: { halign: 'right', fontStyle: 'bold' } }],
-                [{ content: `GRAND TOTAL:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }, { content: formatINR(grandTotal), styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }]
-            );
-
-            (doc as any).autoTable({ startY: 75, head: [["SI No.", "Particulars", "HSN Code", "Rate", "No.of Units", "Amount"]], body: tableRows, theme: 'grid' });
-            const finalY = (doc as any).lastAutoTable.finalY + 5; doc.text(`Rupees in words: ${this.numberToWords(grandTotal)} Only`, 10, finalY + 10);
-
-            const sSelLead = oData.taxHeader.LeadSource || "Direct";
-            this._logDocumentAnalytics("TAX-INVOICE", oData.taxHeader.InvoiceNo, sClientName, grandTotal, sSelLead);
-        } else {
-            const oData = oModel.getData();
-            sRawAddressText = oData.cashHeader.cashTo || ""; sClientName = this._getFirstLineName(sRawAddressText);
-            sTotalAmount = formatINR(oModel.getProperty("/cashTotalSum")); sDocIdentifier = "Cash Bill"; sTargetFilename = `${sClientName}_CashBill.pdf`;
-
-            doc.setFont("helvetica", "bold"); doc.text("To,", 15, 46); doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(oData.cashHeader.cashTo, 90), 15, 51);
-            doc.text(`Date: ${oData.cashHeader.cashDate}`, pageWidth - 14, 46, { align: 'right' });
-
-            const tableRows = oData.cashProducts.map((item: any, index: number) => [index + 1, item.cashBody, item.cashQuantity, formatINR(item.cashAmount)]);
-            const totalAmount = oData.cashProducts.reduce((sum: number, item: any) => sum + parseFloat(item.cashAmount || 0), 0);
-            tableRows.push([{ content: `GRAND TOTAL:`, colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }, { content: formatINR(totalAmount), styles: { halign: 'right', fontStyle: 'bold', fontSize: 10 } }]);
-
-            (doc as any).autoTable({ startY: 75, head: [["SI No.", "Particulars", "Quantity", "Amount"]], body: tableRows, theme: 'grid' });
-
-            const sSelLead = oData.cashHeader.LeadSource || "Direct";
-            this._logDocumentAnalytics("Cash Bill", sTargetFilename, sClientName, totalAmount, sSelLead);
-        }
-
-        if (this.sSignaturBase64) { doc.addImage(this.sSignaturBase64, 'JPEG', pageWidth - 80, pageHeight - 40, 70, 25); }
-
-        const blobHTML5 = doc.output('blob');
-        const pdfFile = new File([blobHTML5], sTargetFilename, { type: 'application/pdf' });
-
-        if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-            try {
-                await navigator.share({
-                    files: [pdfFile], title: `${sDocIdentifier} - IN-TELECOM SERVICES`,
-                    text: `Hello ${sClientName},\n\nYour *${sDocIdentifier}* from *IN-TELECOM SERVICES* is attached.\n\n*Amount Due:* Rs. ${sTotalAmount}\n\nThank you!`
-                });
-                MessageToast.show("Share prompt initialized successfully.");
-            } catch (error) { MessageBox.error("Sharing processing was cancelled or encountered an error."); }
-        } else {
-            MessageBox.information(
-                "Direct file attachment is not supported on this browser window configuration. The PDF file will be downloaded onto your local system shelf. You can drag and drop it into your WhatsApp target chat window manually.",
-                {
-                    title: "Browser Sharing Limitation",
-                    onClose: () => {
-                        doc.save(sTargetFilename);
-                        const aPhoneMatch = sRawAddressText.match(/(?:(?:\+91)|91)?\s*([6-9]\d{9})\b/);
-                        let sTargetPhone = aPhoneMatch ? "91" + aPhoneMatch[1] : "";
-                        const sMessageText = `Hello ${sClientName},\n\nYour *${sDocIdentifier}* from *IN-TELECOM SERVICES* is ready.\n\n*Amount Due:* Rs. ${sTotalAmount}`;
-                        sap.m.URLHelper.redirect(`https://api.whatsapp.com/send?phone=${sTargetPhone}&text=${encodeURIComponent(sMessageText)}`, true);
-                    }
-                }
-            );
-        }
-    }
 
     public async onGenerateWord(sMode: string): Promise<void> {
         if (!(window as any).docxtemplater) {
@@ -1144,13 +1268,8 @@ export default class View extends Controller {
      */
     private async _logDocumentAnalytics(sDocType: string, sDocNo: string, sClient: string, fAmount: number, sLeadSource: string): Promise<void> {
         try {
-            const oGetResponse = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}/latest`, {
-                method: "GET",
-                headers: { "X-Master-Key": this.sMasterKey }
-            });
-            if (!oGetResponse.ok) throw new Error("Failed to read analytical historical logs.");
-            const oGetResult = await oGetResponse.json();
-            const aHistory = oGetResult.record.records || [];
+            const record = await this._executeCloudRequest("GET", this.sAnalyticsBinId, this.sLocalAnalyticsKey, { records: [] });
+            const aHistory = record.records || [];
 
             const oDate = new Date();
             const aMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -1160,20 +1279,13 @@ export default class View extends Controller {
                 type: sDocType,
                 client: sClient,
                 amount: fAmount,
-                lead: sLeadSource, // Embedded parameter mapping
+                lead: sLeadSource,
                 timestamp: oDate.toISOString(),
                 month: aMonths[oDate.getMonth()],
                 year: oDate.getFullYear().toString()
             });
 
-            await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-Master-Key": this.sMasterKey
-                },
-                body: JSON.stringify({ records: aHistory })
-            });
+            await this._executeCloudRequest("PUT", this.sAnalyticsBinId, this.sLocalAnalyticsKey, null, { records: aHistory });
         } catch (oError) {
             console.error("Background analytical tracking logging engine failed: ", oError);
         }
@@ -1203,25 +1315,8 @@ export default class View extends Controller {
         sap.ui.core.BusyIndicator.show(0);
 
         try {
-            const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}/latest`, {
-                method: "GET",
-                headers: { "X-Master-Key": this.sMasterKey }
-            });
-            if (!response.ok) throw new Error("Could not retrieve analytical transaction entries.");
-
-            const sLimitHeader = response.headers.get("x-ratelimit-limit");
-            const sRemainingHeader = response.headers.get("x-ratelimit-remaining");
-
-            if (sLimitHeader && sRemainingHeader) {
-                const iTotalLimit = parseInt(sLimitHeader, 10);
-                const iRemaining = parseInt(sRemainingHeader, 10);
-                if ((iTotalLimit - iRemaining) >= 9000) {
-                    sap.m.MessageBox.warning(`Critical API Consumption Warning: Monthly usage threshold exceeded.`);
-                }
-            }
-
-            const result = await response.json();
-            const aRecords: any[] = result.record.records || [];
+            const record = await this._executeCloudRequest("GET", this.sAnalyticsBinId, this.sLocalAnalyticsKey, { records: [] });
+            const aRecords: any[] = record.records || [];
 
             if (aRecords.length >= 60) {
                 sap.m.MessageBox.information(`Storage Optimization Notice: Current ledger contains ${aRecords.length} entries.`);
@@ -1234,7 +1329,6 @@ export default class View extends Controller {
             const sYearMinus2 = (iCurrentYear - 2).toString();
 
             const oYearSelect = new sap.m.Select({
-
                 selectedKey: sYearCurrent,
                 items: [
                     new sap.ui.core.Item({ key: "ALL", text: "All Years" }),
@@ -1245,7 +1339,6 @@ export default class View extends Controller {
             });
 
             const oMonthSelect = new sap.m.Select({
-
                 selectedKey: "ALL",
                 items: [
                     new sap.ui.core.Item({ key: "ALL", text: "All Months" }),
@@ -1256,7 +1349,6 @@ export default class View extends Controller {
             });
 
             const oLeadSelect = new sap.m.Select({
-
                 selectedKey: "ALL",
                 items: [
                     new sap.ui.core.Item({ key: "ALL", text: "All Leads" }),
@@ -1379,9 +1471,8 @@ export default class View extends Controller {
     private async _openGranularDeletionWorkspace(sTargetYear: string, sTargetMonth: string): Promise<void> {
         sap.ui.core.BusyIndicator.show(0);
         try {
-            const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}/latest`, { method: "GET", headers: { "X-Master-Key": this.sMasterKey } });
-            const result = await response.json();
-            const aMasterRecords: any[] = result.record.records || [];
+            const record = await this._executeCloudRequest("GET", this.sAnalyticsBinId, this.sLocalAnalyticsKey, { records: [] });
+            const aMasterRecords: any[] = record.records || [];
 
             const aFilteredRecords = aMasterRecords.filter((rec: any) => {
                 const oDate = new Date(rec.timestamp);
@@ -1456,9 +1547,8 @@ export default class View extends Controller {
                                 if (oMatch) { oMatch.type = modifiedItem.type; oMatch.lead = modifiedItem.lead; oMatch.amount = parseFloat(modifiedItem.amount) || 0; }
                             });
                             try {
-                                const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, { method: "PUT", headers: { "Content-Type": "application/json", "X-Master-Key": this.sMasterKey }, body: JSON.stringify({ records: aMasterRecords }) });
-                                if (!response.ok) throw new Error("Cloud update operation rejected.");
-                                sap.m.MessageToast.show("Changes saved successfully to cloud!");
+                                await this._executeCloudRequest("PUT", this.sAnalyticsBinId, this.sLocalAnalyticsKey, null, { records: aMasterRecords });
+                                sap.m.MessageToast.show("Changes saved successfully!");
                                 oWipeDialog.close();
                                 if (this.oMainAnalyticsDialog) this.oMainAnalyticsDialog.close();
                             } catch (ex: any) { sap.m.MessageBox.error(ex.message); } finally { sap.ui.core.BusyIndicator.hide(); }
@@ -1507,7 +1597,7 @@ export default class View extends Controller {
 
                         aMasterRecords.push(oNewItem);
                         try {
-                            await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, { method: "PUT", headers: { "Content-Type": "application/json", "X-Master-Key": this.sMasterKey }, body: JSON.stringify({ records: aMasterRecords }) });
+                            await this._executeCloudRequest("PUT", this.sAnalyticsBinId, this.sLocalAnalyticsKey, null, { records: aMasterRecords });
                             sap.m.MessageToast.show("Manual ledger log saved.");
                             oWipeDialog.close();
                             if (this.oMainAnalyticsDialog) this.oMainAnalyticsDialog.close();
@@ -1527,11 +1617,7 @@ export default class View extends Controller {
             const aTargetIdsToDelete = aSelectedUIItems.map((oItem: any) => oItem.getBindingContext().getProperty("id"));
             const aCleanedRecords = aMasterRecords.filter((rec: any) => !aTargetIdsToDelete.includes(rec.id));
 
-            const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sAnalyticsBinId}`, {
-                method: "PUT", headers: { "Content-Type": "application/json", "X-Master-Key": this.sMasterKey },
-                body: JSON.stringify({ records: aCleanedRecords })
-            });
-            if (!response.ok) throw new Error("Cloud sync write parameters rejected updates.");
+            await this._executeCloudRequest("PUT", this.sAnalyticsBinId, this.sLocalAnalyticsKey, null, { records: aCleanedRecords });
 
             sap.m.MessageToast.show(`Successfully erased ${aTargetIdsToDelete.length} record lines.`);
             oWipeDialog.close();
@@ -1566,24 +1652,11 @@ export default class View extends Controller {
     // CUSTOMER PROFILE DIRECTORY (LOOKUP, CRUD & INJECTION FORM PANELS)
     // =========================================================================
 
-    /**
-     * Fetches custom records registry from jsonbin.io and initializes the 
-     * single-select lookup table layout data grid workspace with fuzzy filtering.
-     */
-    /**
-      * CUSTOMER DIRECTORY LOOKUP ENGINE
-      * Dynamically instantiates the lookup catalog and handles runtime scoping states cleanly.
-      */
     public async onOpenCustomerDirectory(): Promise<void> {
         sap.ui.core.BusyIndicator.show(0);
         try {
-            const response = await fetch(`https://api.jsonbin.io/v3/b/${this.sCustomerBinId}/latest`, {
-                method: "GET",
-                headers: { "X-Master-Key": this.sMasterKey }
-            });
-            if (!response.ok) throw new Error("Could not retrieve customer registry database.");
-            const result = await response.json();
-            const aCustomers: any[] = result.record.customers || [];
+            const record = await this._executeCloudRequest("GET", this.sCustomerBinId, this.sLocalCustomerKey, { customers: [] });
+            const aCustomers: any[] = record.customers || [];
 
             const oCustModel = new sap.ui.model.json.JSONModel({ customers: aCustomers });
             const oSearchField = new sap.m.SearchField({
@@ -1621,7 +1694,6 @@ export default class View extends Controller {
             });
             oCustTable.setModel(oCustModel);
 
-            // FIX: We declare the layout instance shell first, allowing button bindings to resolve it safely later
             const oDirectoryDialog = new sap.m.Dialog({
                 title: "Customer Registry",
                 contentWidth: "620px",
@@ -1630,26 +1702,19 @@ export default class View extends Controller {
                 afterClose: () => oDirectoryDialog.destroy()
             });
 
-            // FIX: Build the header sub-elements dynamically AFTER the dialog pointer exists in memory
             const oCustomHeaderBar = new sap.m.Bar({
                 contentLeft: [new sap.m.Title({ text: "Customer Registry" })],
                 contentRight: [
                     new sap.m.Button({
                         icon: "sap-icon://decline",
                         type: "Transparent",
-                        press: () => {
-                            // Resolves safely now because the dialog instance is fully initialized in memory
-                            oDirectoryDialog.close();
-                        }
+                        press: () => { oDirectoryDialog.close(); }
                     })
                 ]
             });
 
-            // Inject the customized components back into the dialog layout setup properties
             oDirectoryDialog.setCustomHeader(oCustomHeaderBar);
             oDirectoryDialog.setSubHeader(new sap.m.Bar({ contentLeft: [oSearchField] }));
-
-
 
             oDirectoryDialog.addButton(new sap.m.Button({
                 text: "Edit", icon: "sap-icon://edit", type: "Attention",
@@ -1673,7 +1738,7 @@ export default class View extends Controller {
                 text: "Register New", icon: "sap-icon://add", type: "Accept",
                 press: () => { this._openCustomerFormWorkspace(aCustomers, oDirectoryDialog, null); }
             }));
-            // Attach operational footprint buttons back onto the dialog base footer layout
+
             oDirectoryDialog.addButton(new sap.m.Button({
                 text: "Inject", type: "Emphasized", icon: "sap-icon://accept",
                 press: () => {
@@ -1692,10 +1757,6 @@ export default class View extends Controller {
         }
     }
 
-    /**
-     * Automatically maps database profile values into matching input form layout containers 
-     * depending on the active visible view tab selection ("Quotation" | "TAX-INVOICE" | "Cash Bill").
-     */
     private _autoFillCustomerInputs(oCust: any): void {
         const oView = this.getView();
         const sSelectMode = (oView?.byId("mySelect") as Select)?.getSelectedItem()?.getText() || "Quotation";
@@ -1712,9 +1773,6 @@ export default class View extends Controller {
         oModel.refresh(true);
     }
 
-    /**
-     * Sub-dialog form wrapper to handle both Registration (Add New) and Modification (Edit) tasks.
-     */
     private _openCustomerFormWorkspace(aMasterList: any[], oParentLookupDialog: Dialog, oExistingCustToEdit: any | null): void {
         const bIsEditMode = !!oExistingCustToEdit;
         const oName = new sap.m.Input({ placeholder: "Company or Individual Profile Name", value: bIsEditMode ? oExistingCustToEdit.name : "" });
@@ -1744,12 +1802,8 @@ export default class View extends Controller {
                         }
 
                         try {
-                            await fetch(`https://api.jsonbin.io/v3/b/${this.sCustomerBinId}`, {
-                                method: "PUT",
-                                headers: { "Content-Type": "application/json", "X-Master-Key": this.sMasterKey },
-                                body: JSON.stringify({ customers: aMasterList })
-                            });
-                            sap.m.MessageToast.show("Cloud profile synchronization sequence completed.");
+                            await this._executeCloudRequest("PUT", this.sCustomerBinId, this.sLocalCustomerKey, null, { customers: aMasterList });
+                            sap.m.MessageToast.show("Client registry successfully updated.");
                             oParentLookupDialog.close();
                         } catch (e: any) {
                             sap.m.MessageBox.error(e.message);
@@ -1769,12 +1823,8 @@ export default class View extends Controller {
         oFormDialog.open();
     }
 
-    /**
-     * Excludes a selected customer profile entity from the master dataset array list 
-     * and updates the repository cache backend synchronously.
-     */
     private _deleteCustomerRecordDirect(aMasterList: any[], oCustTargetToDelete: any, oParentLookupDialog: Dialog): void {
-        sap.m.MessageBox.confirm(`Wipe profile matching ${oCustTargetToDelete.name} permanently from the cloud repository directory registry?`, {
+        sap.m.MessageBox.confirm(`Wipe profile matching ${oCustTargetToDelete.name} permanently from the directory registry?`, {
             title: "Confirm destructive operation",
             actions: [sap.m.MessageBox.Action.YES, sap.m.MessageBox.Action.NO],
             onClose: async (sAction: string) => {
@@ -1784,11 +1834,7 @@ export default class View extends Controller {
 
                 const aCleanedCustomers = aMasterList.filter((item: any) => item.phone !== oCustTargetToDelete.phone || item.name !== oCustTargetToDelete.name);
                 try {
-                    await fetch(`https://api.jsonbin.io/v3/b/${this.sCustomerBinId}`, {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json", "X-Master-Key": this.sMasterKey },
-                        body: JSON.stringify({ customers: aCleanedCustomers })
-                    });
+                    await this._executeCloudRequest("PUT", this.sCustomerBinId, "fallback_local_customers_registry", null, { customers: aCleanedCustomers });
                     sap.m.MessageToast.show("Erased profile record line.");
                 } catch (e: any) {
                     sap.m.MessageBox.error(e.message);
@@ -1798,5 +1844,4 @@ export default class View extends Controller {
             }
         });
     }
-
 }
